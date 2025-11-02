@@ -84,12 +84,10 @@ if (-not (Test-Path $SettingsPath)) {
 }
 
 # Execute claude with settings
-# Build argument array to pass all remaining arguments to Claude CLI
-$ClaudeArgs = @("--settings", $SettingsPath)
+# Pass arguments directly to Claude CLI with proper splatting
 if ($RemainingArgs) {
-    $ClaudeArgs += $RemainingArgs
+    & claude --settings $SettingsPath @RemainingArgs
+} else {
+    & claude --settings $SettingsPath
 }
-
-# Execute claude and preserve exit code
-& claude $ClaudeArgs
 exit $LASTEXITCODE

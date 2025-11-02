@@ -1,8 +1,8 @@
 # CCS - Claude Code Switch
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Language: Bash](https://img.shields.io/badge/Language-Bash-blue.svg)](https://www.gnu.org/software/bash/)
-[![Platform: macOS | Linux](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey.svg)]()
+[![Language: Bash | PowerShell](https://img.shields.io/badge/Language-Bash%20%7C%20PowerShell-blue.svg)]()
+[![Platform: macOS | Linux | Windows](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)]()
 
 **Languages**: [English](README.md) | [Tiếng Việt](README.vi.md)
 
@@ -26,9 +26,16 @@ One command. Zero downtime. No file editing. Right model, right task.
 
 ## Quick Start
 
-**Install** (one-liner):
+**Install**:
+
+**macOS / Linux**:
 ```bash
 curl -fsSL ccs.kaitran.ca/install | bash
+```
+
+**Windows PowerShell**:
+```powershell
+irm ccs.kaitran.ca/install.ps1 | iex
 ```
 
 **Configure**:
@@ -103,30 +110,49 @@ If you have both Claude subscription and GLM Coding Plan, you know the pain:
 
 ### One-Liner (Recommended)
 
-**Short URL** (via CloudFlare):
+**macOS / Linux**:
 ```bash
+# Short URL (via CloudFlare)
 curl -fsSL ccs.kaitran.ca/install | bash
-```
 
-**Direct from GitHub**:
-```bash
+# Or direct from GitHub
 curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/install.sh | bash
 ```
 
-**Note**: The installer supports both direct execution (`./install.sh`) and piped installation (`curl | bash`).
+**Windows PowerShell**:
+```powershell
+# Short URL (via CloudFlare)
+irm ccs.kaitran.ca/install.ps1 | iex
+
+# Or direct from GitHub
+irm https://raw.githubusercontent.com/kaitranntt/ccs/main/install.ps1 | iex
+```
+
+**Note**:
+- Unix installer supports both direct execution (`./install.sh`) and piped installation (`curl | bash`)
+- Windows installer requires PowerShell 5.1+ (pre-installed on Windows 10+)
 
 ### Git Clone
 
+**macOS / Linux**:
 ```bash
 git clone https://github.com/kaitranntt/ccs.git
 cd ccs
 ./install.sh
 ```
 
+**Windows PowerShell**:
+```powershell
+git clone https://github.com/kaitranntt/ccs.git
+cd ccs
+.\install.ps1
+```
+
 **Note**: Works with git worktrees and submodules - the installer detects both `.git` directory and `.git` file.
 
 ### Manual
 
+**macOS / Linux**:
 ```bash
 # Download script
 curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/ccs -o ~/.local/bin/ccs
@@ -136,27 +162,51 @@ chmod +x ~/.local/bin/ccs
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-### Upgrade
+**Windows PowerShell**:
+```powershell
+# Create directory
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.ccs"
 
-**From git clone**:
-```bash
-cd ccs && git pull && ./install.sh
+# Download script
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/kaitranntt/ccs/main/ccs.ps1" -OutFile "$env:USERPROFILE\.ccs\ccs.ps1"
+
+# Add to PATH (restart terminal after)
+$Path = [Environment]::GetEnvironmentVariable("Path", "User")
+[Environment]::SetEnvironmentVariable("Path", "$Path;$env:USERPROFILE\.ccs", "User")
 ```
 
-**From curl install**:
-```bash
-# Short URL
-curl -fsSL ccs.kaitran.ca/install | bash
+### Upgrade
 
-# Or direct from GitHub
-curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/install.sh | bash
+**macOS / Linux**:
+```bash
+# From git clone
+cd ccs && git pull && ./install.sh
+
+# From curl install
+curl -fsSL ccs.kaitran.ca/install | bash
+```
+
+**Windows PowerShell**:
+```powershell
+# From git clone
+cd ccs
+git pull
+.\install.ps1
+
+# From irm install
+irm ccs.kaitran.ca/install.ps1 | iex
 ```
 
 **Note**: Upgrading preserves your existing API keys and settings. The installer only adds new features without overwriting your configuration.
 
 ## Configuration
 
-The installer auto-creates `~/.ccs/config.json` and profile templates during installation. If you need to customize:
+The installer auto-creates config and profile templates during installation:
+
+**macOS / Linux**: `~/.ccs/config.json`
+**Windows**: `%USERPROFILE%\.ccs\config.json`
+
+If you need to customize:
 
 ```json
 {
@@ -167,6 +217,8 @@ The installer auto-creates `~/.ccs/config.json` and profile templates during ins
   }
 }
 ```
+
+**Note**: Config uses Unix-style paths (`~/`) for cross-platform compatibility. Windows version automatically converts paths.
 
 Each profile points to a Claude settings JSON file. Create settings files per [Claude CLI docs](https://docs.claude.com/en/docs/claude-code/installation).
 
@@ -199,10 +251,13 @@ These variables ensure GLM is used as the default provider when switching profil
 ### Basic
 
 ```bash
+# Works on macOS, Linux, and Windows
 ccs           # Use default profile (no args)
 ccs glm       # Use GLM profile
 ccs son       # Use Sonnet profile
 ```
+
+**Windows Note**: Commands work identically in PowerShell, CMD, and Git Bash.
 
 ### With Arguments
 
@@ -304,11 +359,16 @@ No magic. No file modification. Pure delegation.
 
 ## Requirements
 
+### macOS / Linux
 - `bash` 3.2+
 - `jq` (JSON processor)
 - [Claude CLI](https://docs.claude.com/en/docs/claude-code/installation)
 
-### Installing jq
+### Windows
+- PowerShell 5.1+ (pre-installed on Windows 10+)
+- [Claude CLI](https://docs.claude.com/en/docs/claude-code/installation)
+
+### Installing jq (macOS / Linux only)
 
 ```bash
 # macOS
@@ -324,7 +384,45 @@ sudo dnf install jq
 sudo pacman -S jq
 ```
 
+**Note**: Windows version uses PowerShell's built-in JSON support - no jq required.
+
 ## Troubleshooting
+
+### Windows-Specific Issues
+
+#### PowerShell Execution Policy
+
+If you see "cannot be loaded because running scripts is disabled":
+
+```powershell
+# Check current policy
+Get-ExecutionPolicy
+
+# Allow current user to run scripts (recommended)
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# Or run with bypass (one-time)
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.ccs\ccs.ps1" glm
+```
+
+#### PATH not updated (Windows)
+
+If `ccs` command not found after installation:
+
+1. Restart your terminal
+2. Or manually add to PATH:
+   - Open "Edit environment variables for your account"
+   - Add `%USERPROFILE%\.ccs` to User PATH
+   - Restart terminal
+
+#### Claude CLI not found (Windows)
+
+```powershell
+# Check Claude CLI
+where.exe claude
+
+# If missing, install from Claude docs
+```
 
 ### Installation Issues
 
@@ -421,12 +519,14 @@ Error: Profile 'default' not found in ~/.ccs/config.json
 
 ## Uninstallation
 
+### macOS / Linux
+
 **Using installed command**:
 ```bash
 ccs-uninstall
 ```
 
-**One-liner** (if ccs-uninstall not available):
+**One-liner**:
 ```bash
 # Short URL
 curl -fsSL ccs.kaitran.ca/uninstall | bash
@@ -442,14 +542,45 @@ rm ~/.local/bin/ccs-uninstall
 rm -rf ~/.ccs  # If you want to remove all CCS files
 ```
 
+### Windows PowerShell
+
+**Using installed command**:
+```powershell
+ccs-uninstall
+```
+
+**One-liner**:
+```powershell
+# Short URL
+irm ccs.kaitran.ca/uninstall.ps1 | iex
+
+# Or direct from GitHub
+irm https://raw.githubusercontent.com/kaitranntt/ccs/main/uninstall.ps1 | iex
+```
+
+**Manual**:
+```powershell
+# Remove scripts
+Remove-Item "$env:USERPROFILE\.ccs\ccs.ps1" -Force
+Remove-Item "$env:USERPROFILE\.ccs\uninstall.ps1" -Force
+
+# Remove from PATH
+$Path = [Environment]::GetEnvironmentVariable("Path", "User")
+$NewPath = ($Path -split ';' | Where-Object { $_ -ne "$env:USERPROFILE\.ccs" }) -join ';'
+[Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
+
+# Optional: Remove all CCS files
+Remove-Item "$env:USERPROFILE\.ccs" -Recurse -Force
+```
+
 ## Contributing
 
 PRs welcome! Keep it simple (KISS principle).
 
 **Guidelines**:
-- Maintain bash 3.2+ compatibility
-- No dependencies beyond jq
-- Test on macOS and Linux
+- Maintain bash 3.2+ compatibility (Unix) and PowerShell 5.1+ (Windows)
+- No dependencies beyond jq (Unix) or built-in PowerShell (Windows)
+- Test on macOS, Linux, and Windows
 - Follow existing code style
 
 ## Philosophy

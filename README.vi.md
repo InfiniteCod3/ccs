@@ -1,8 +1,8 @@
 # CCS - Claude Code Switch
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Language: Bash](https://img.shields.io/badge/Language-Bash-blue.svg)](https://www.gnu.org/software/bash/)
-[![Platform: macOS | Linux](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey.svg)]()
+[![Language: Bash | PowerShell](https://img.shields.io/badge/Language-Bash%20%7C%20PowerShell-blue.svg)]()
+[![Platform: macOS | Linux | Windows](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)]()
 
 **Ngôn ngữ**: [English](README.md) | [Tiếng Việt](README.vi.md)
 
@@ -26,9 +26,16 @@ Một lệnh. Không downtime. Không phải sửa file. Đúng model, đúng vi
 
 ## Bắt Đầu Nhanh
 
-**Cài đặt** (một dòng lệnh):
+**Cài đặt**:
+
+**macOS / Linux**:
 ```bash
 curl -fsSL ccs.kaitran.ca/install | bash
+```
+
+**Windows PowerShell**:
+```powershell
+irm ccs.kaitran.ca/install.ps1 | iex
 ```
 
 **Cấu hình**:
@@ -94,30 +101,49 @@ Nếu bạn có cả Claude subscription và GLM Coding Plan, bạn biết cái 
 
 ### Một Dòng Lệnh (Khuyến Nghị)
 
-**URL ngắn** (qua CloudFlare):
+**macOS / Linux**:
 ```bash
+# URL ngắn (qua CloudFlare)
 curl -fsSL ccs.kaitran.ca/install | bash
-```
 
-**Trực tiếp từ GitHub**:
-```bash
+# Hoặc trực tiếp từ GitHub
 curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/install.sh | bash
 ```
 
-**Lưu ý**: Installer hỗ trợ cả chạy trực tiếp (`./install.sh`) và piped installation (`curl | bash`).
+**Windows PowerShell**:
+```powershell
+# URL ngắn (qua CloudFlare)
+irm ccs.kaitran.ca/install.ps1 | iex
+
+# Hoặc trực tiếp từ GitHub
+irm https://raw.githubusercontent.com/kaitranntt/ccs/main/install.ps1 | iex
+```
+
+**Lưu ý**:
+- Installer Unix hỗ trợ cả chạy trực tiếp (`./install.sh`) và piped installation (`curl | bash`)
+- Installer Windows yêu cầu PowerShell 5.1+ (có sẵn trên Windows 10+)
 
 ### Git Clone
 
+**macOS / Linux**:
 ```bash
 git clone https://github.com/kaitranntt/ccs.git
 cd ccs
 ./install.sh
 ```
 
+**Windows PowerShell**:
+```powershell
+git clone https://github.com/kaitranntt/ccs.git
+cd ccs
+.\install.ps1
+```
+
 **Lưu ý**: Hoạt động với git worktrees và submodules - installer phát hiện cả `.git` directory và `.git` file.
 
 ### Thủ Công
 
+**macOS / Linux**:
 ```bash
 # Tải script
 curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/ccs -o ~/.local/bin/ccs
@@ -127,27 +153,51 @@ chmod +x ~/.local/bin/ccs
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-### Nâng Cấp
+**Windows PowerShell**:
+```powershell
+# Tạo thư mục
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.ccs"
 
-**Từ git clone**:
-```bash
-cd ccs && git pull && ./install.sh
+# Tải script
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/kaitranntt/ccs/main/ccs.ps1" -OutFile "$env:USERPROFILE\.ccs\ccs.ps1"
+
+# Thêm vào PATH (khởi động lại terminal sau đó)
+$Path = [Environment]::GetEnvironmentVariable("Path", "User")
+[Environment]::SetEnvironmentVariable("Path", "$Path;$env:USERPROFILE\.ccs", "User")
 ```
 
-**Từ curl install**:
-```bash
-# URL ngắn
-curl -fsSL ccs.kaitran.ca/install | bash
+### Nâng Cấp
 
-# Hoặc trực tiếp từ GitHub
-curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/install.sh | bash
+**macOS / Linux**:
+```bash
+# Từ git clone
+cd ccs && git pull && ./install.sh
+
+# Từ curl install
+curl -fsSL ccs.kaitran.ca/install | bash
+```
+
+**Windows PowerShell**:
+```powershell
+# Từ git clone
+cd ccs
+git pull
+.\install.ps1
+
+# Từ irm install
+irm ccs.kaitran.ca/install.ps1 | iex
 ```
 
 **Lưu ý**: Nâng cấp giữ nguyên API keys và settings hiện tại. Installer chỉ thêm tính năng mới mà không ghi đè cấu hình của bạn.
 
 ## Cấu Hình
 
-Installer tự động tạo `~/.ccs/config.json` và profile templates khi cài đặt. Nếu cần tùy chỉnh:
+Installer tự động tạo config và profile templates khi cài đặt:
+
+**macOS / Linux**: `~/.ccs/config.json`
+**Windows**: `%USERPROFILE%\.ccs\config.json`
+
+Nếu cần tùy chỉnh:
 
 ```json
 {
@@ -158,6 +208,8 @@ Installer tự động tạo `~/.ccs/config.json` và profile templates khi cài
   }
 }
 ```
+
+**Lưu ý**: Config dùng Unix-style paths (`~/`) để tương thích đa nền tảng. Phiên bản Windows tự động chuyển đổi paths.
 
 Mỗi profile trỏ đến một file settings JSON của Claude. Tạo file settings theo [tài liệu Claude CLI](https://docs.claude.com/en/docs/claude-code/installation).
 
@@ -190,10 +242,13 @@ Các biến này đảm bảo GLM được dùng làm provider mặc định khi
 ### Cơ Bản
 
 ```bash
+# Hoạt động trên macOS, Linux, và Windows
 ccs           # Dùng profile mặc định (không args)
 ccs glm       # Dùng GLM profile
 ccs son       # Dùng Sonnet profile
 ```
+
+**Lưu ý Windows**: Lệnh hoạt động giống nhau trên PowerShell, CMD, và Git Bash.
 
 ### Với Arguments
 
@@ -284,11 +339,16 @@ ccs son
 
 ## Yêu Cầu
 
+### macOS / Linux
 - **Bash** 3.2+
 - **jq** (để xử lý JSON)
 - **Claude CLI** đã cài đặt
 
-### Cài jq
+### Windows
+- **PowerShell** 5.1+ (có sẵn trên Windows 10+)
+- **Claude CLI** đã cài đặt
+
+### Cài jq (chỉ macOS / Linux)
 
 **macOS**:
 ```bash
@@ -310,7 +370,45 @@ sudo dnf install jq
 sudo pacman -S jq
 ```
 
+**Lưu ý**: Phiên bản Windows dùng JSON support có sẵn của PowerShell - không cần jq.
+
 ## Troubleshooting
+
+### Vấn Đề Riêng Cho Windows
+
+#### PowerShell Execution Policy
+
+Nếu bạn thấy lỗi "cannot be loaded because running scripts is disabled":
+
+```powershell
+# Kiểm tra policy hiện tại
+Get-ExecutionPolicy
+
+# Cho phép user hiện tại chạy scripts (khuyến nghị)
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# Hoặc chạy với bypass (một lần)
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.ccs\ccs.ps1" glm
+```
+
+#### PATH chưa được cập nhật (Windows)
+
+Nếu lệnh `ccs` không tìm thấy sau khi cài đặt:
+
+1. Khởi động lại terminal
+2. Hoặc thêm thủ công vào PATH:
+   - Mở "Edit environment variables for your account"
+   - Thêm `%USERPROFILE%\.ccs` vào User PATH
+   - Khởi động lại terminal
+
+#### Claude CLI không tìm thấy (Windows)
+
+```powershell
+# Kiểm tra Claude CLI
+where.exe claude
+
+# Nếu thiếu, cài đặt từ tài liệu Claude
+```
 
 ### Vấn Đề Cài Đặt
 
@@ -407,12 +505,14 @@ Error: Profile 'default' not found in ~/.ccs/config.json
 
 ## Gỡ Cài Đặt
 
+### macOS / Linux
+
 **Dùng lệnh đã cài**:
 ```bash
 ccs-uninstall
 ```
 
-**Một dòng lệnh** (nếu ccs-uninstall không có):
+**Một dòng lệnh**:
 ```bash
 # URL ngắn
 curl -fsSL ccs.kaitran.ca/uninstall | bash
@@ -426,6 +526,37 @@ curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/uninstall.sh | 
 rm ~/.local/bin/ccs
 rm ~/.local/bin/ccs-uninstall
 rm -rf ~/.ccs  # Nếu muốn xóa tất cả files của CCS
+```
+
+### Windows PowerShell
+
+**Dùng lệnh đã cài**:
+```powershell
+ccs-uninstall
+```
+
+**Một dòng lệnh**:
+```powershell
+# URL ngắn
+irm ccs.kaitran.ca/uninstall.ps1 | iex
+
+# Hoặc trực tiếp từ GitHub
+irm https://raw.githubusercontent.com/kaitranntt/ccs/main/uninstall.ps1 | iex
+```
+
+**Thủ công**:
+```powershell
+# Xóa scripts
+Remove-Item "$env:USERPROFILE\.ccs\ccs.ps1" -Force
+Remove-Item "$env:USERPROFILE\.ccs\uninstall.ps1" -Force
+
+# Xóa khỏi PATH
+$Path = [Environment]::GetEnvironmentVariable("Path", "User")
+$NewPath = ($Path -split ';' | Where-Object { $_ -ne "$env:USERPROFILE\.ccs" }) -join ';'
+[Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
+
+# Tùy chọn: Xóa tất cả files CCS
+Remove-Item "$env:USERPROFILE\.ccs" -Recurse -Force
 ```
 
 ## Bảo Mật
@@ -454,7 +585,7 @@ A: Không. Profile switching hoàn toàn offline. Chỉ cần internet cho API c
 A: Không. Installer tạo files mới và giữ nguyên configs hiện tại.
 
 **Q: CCS có hoạt động trên Windows không?**
-A: CCS cần bash. Dùng WSL, Git Bash, hoặc Cygwin trên Windows.
+A: Có! CCS bây giờ hỗ trợ Windows PowerShell 5.1+ ngoài macOS/Linux bash.
 
 ## Đóng Góp
 
@@ -465,6 +596,12 @@ Contributions được chào đón! Vui lòng:
 3. Commit changes của bạn
 4. Push lên branch
 5. Mở Pull Request
+
+**Guidelines**:
+- Duy trì tương thích bash 3.2+ (Unix) và PowerShell 5.1+ (Windows)
+- Không dependencies ngoài jq (Unix) hoặc PowerShell có sẵn (Windows)
+- Test trên macOS, Linux, và Windows
+- Tuân theo code style hiện có
 
 ## License
 

@@ -27,6 +27,37 @@ else
   INSTALL_METHOD="standalone"
 fi
 
+# --- Platform Detection ---
+# Detect platform and redirect to Windows installer if needed
+detect_platform() {
+  case "$OSTYPE" in
+    msys*|mingw*|cygwin*|win32*)
+      echo "windows"
+      ;;
+    *)
+      echo "unix"
+      ;;
+  esac
+}
+
+PLATFORM=$(detect_platform)
+
+if [[ "$PLATFORM" == "windows" ]]; then
+  echo "Windows detected. Using PowerShell installer..."
+
+  if [[ -f "$SCRIPT_DIR/install.ps1" ]]; then
+    powershell.exe -ExecutionPolicy Bypass -File "$SCRIPT_DIR/install.ps1"
+    exit $?
+  else
+    echo "Error: install.ps1 not found."
+    echo "Please download the full CCS package from:"
+    echo "  https://github.com/kaitranntt/ccs"
+    exit 1
+  fi
+fi
+
+# Continue with Unix installation...
+
 # --- Helper Functions ---
 
 detect_current_provider() {

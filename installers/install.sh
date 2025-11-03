@@ -31,7 +31,7 @@ fi
 # IMPORTANT: Update this version when releasing new versions!
 # This hardcoded version is used for standalone installations (curl | bash)
 # For git installations, VERSION file is read if available
-CCS_VERSION="2.1.1"
+CCS_VERSION="2.1.2"
 
 # Try to read VERSION file for git installations
 if [[ -f "$SCRIPT_DIR/VERSION" ]]; then
@@ -281,7 +281,7 @@ if [[ -f "$SCRIPT_DIR/uninstall.sh" ]]; then
   ln -sf "$CCS_DIR/uninstall.sh" "$INSTALL_DIR/ccs-uninstall"
   echo "│  ✓ Installed uninstaller"
 elif [[ "$INSTALL_METHOD" == "standalone" ]] && command -v curl &> /dev/null; then
-  if curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/uninstall.sh -o "$CCS_DIR/uninstall.sh"; then
+  if curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/installers/uninstall.sh -o "$CCS_DIR/uninstall.sh"; then
     chmod +x "$CCS_DIR/uninstall.sh"
     ln -sf "$CCS_DIR/uninstall.sh" "$INSTALL_DIR/ccs-uninstall"
     echo "│  ✓ Installed uninstaller"

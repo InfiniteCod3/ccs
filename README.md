@@ -53,7 +53,24 @@ irm ccs.kaitran.ca/install | iex
 ccs              # Use Claude subscription (default)
 ccs glm          # Use GLM fallback
 ccs --version    # Show CCS version
+ccs --install    # Install CCS commands and skills to ~/.claude/
 ```
+
+### Task Delegation
+
+CCS includes intelligent task delegation via the `/ccs` meta-command:
+
+```bash
+# After running ccs --install, you can use:
+/ccs glm /plan "add user authentication"
+/ccs glm /code "implement auth endpoints"
+/ccs glm /ask "explain this error"
+```
+
+**Benefits**:
+- ✅ Save tokens by delegating simple tasks to cheaper models
+- ✅ Use right model for each task automatically
+- ✅ Seamless integration with existing workflows
 
 ## Philosophy
 

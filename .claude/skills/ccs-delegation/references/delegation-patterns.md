@@ -63,15 +63,6 @@ Use GLM for initial implementation, Sonnet for refinement:
 - ❌ Performance optimization
 - ❌ Architecture decisions
 
-### Haiku - Best For:
-- ✅ Quick questions ("what is X?", "explain Y")
-- ✅ Simple explanations
-- ✅ Code snippet explanations
-- ✅ Quick documentation lookups
-- ✅ Simple troubleshooting
-- ❌ Code implementation
-- ❌ Complex analysis
-- ❌ Multi-step tasks
 
 ### Sonnet 4.5 - Best For:
 - ✅ Complex architecture and design

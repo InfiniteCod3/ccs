@@ -21,6 +21,102 @@ $CCS_VERSION = if (Test-Path $VersionFile) {
     "unknown"
 }
 
+# Installation function for commands and skills
+function Install-CommandsAndSkills {
+    $SourceDir = Join-Path $ScriptDir ".claude"
+    $TargetDir = Join-Path $env:USERPROFILE ".claude"
+
+    Write-Host "[Installing CCS Commands & Skills]" -ForegroundColor Cyan
+    Write-Host "|  Source: $SourceDir"
+    Write-Host "|  Target: $TargetDir"
+    Write-Host "|"
+
+    # Check if source directory exists
+    if (-not (Test-Path $SourceDir)) {
+        Write-Host "|"
+        Write-Host "[ERROR] Source directory not found: $SourceDir" -ForegroundColor Red
+        Write-Host "  Make sure you're running this from the CCS repository directory."
+        exit 1
+    }
+
+    # Create target directories if they don't exist
+    $CommandsDir = Join-Path $TargetDir "commands"
+    $SkillsDir = Join-Path $TargetDir "skills"
+
+    if (-not (Test-Path $CommandsDir)) {
+        New-Item -ItemType Directory -Path $CommandsDir -Force | Out-Null
+    }
+    if (-not (Test-Path $SkillsDir)) {
+        New-Item -ItemType Directory -Path $SkillsDir -Force | Out-Null
+    }
+
+    $InstalledCount = 0
+    $SkippedCount = 0
+
+    # Install commands
+    $SourceCommandsDir = Join-Path $SourceDir "commands"
+    if (Test-Path $SourceCommandsDir) {
+        Write-Host "|  Installing commands..." -ForegroundColor Yellow
+        Get-ChildItem $SourceCommandsDir -Filter "*.md" | ForEach-Object {
+            $CmdName = $_.BaseName
+            $TargetFile = Join-Path $CommandsDir "$CmdName.md"
+
+            if (Test-Path $TargetFile) {
+                Write-Host "|  |  [i]  Skipping existing command: $CmdName.md" -ForegroundColor Yellow
+                $SkippedCount++
+            } else {
+                try {
+                    Copy-Item $_.FullName $TargetFile -ErrorAction Stop
+                    Write-Host "|  |  [OK] Installed command: $CmdName.md" -ForegroundColor Green
+                    $InstalledCount++
+                } catch {
+                    Write-Host "|  |  [!]  Failed to install command: $CmdName.md" -ForegroundColor Red
+                    Write-Host "|       Error: $($_.Exception.Message)" -ForegroundColor Red
+                }
+            }
+        }
+    } else {
+        Write-Host "|  [i]  No commands directory found" -ForegroundColor Gray
+    }
+
+    Write-Host "|"
+
+    # Install skills
+    $SourceSkillsDir = Join-Path $SourceDir "skills"
+    if (Test-Path $SourceSkillsDir) {
+        Write-Host "|  Installing skills..." -ForegroundColor Yellow
+        Get-ChildItem $SourceSkillsDir -Directory | ForEach-Object {
+            $SkillName = $_.Name
+            $TargetSkillDir = Join-Path $SkillsDir $SkillName
+
+            if (Test-Path $TargetSkillDir) {
+                Write-Host "|  |  [i]  Skipping existing skill: $SkillName" -ForegroundColor Yellow
+                $SkippedCount++
+            } else {
+                try {
+                    Copy-Item $_.FullName $TargetSkillDir -Recurse -ErrorAction Stop
+                    Write-Host "|  |  [OK] Installed skill: $SkillName" -ForegroundColor Green
+                    $InstalledCount++
+                } catch {
+                    Write-Host "|  |  [!]  Failed to install skill: $SkillName" -ForegroundColor Red
+                    Write-Host "|       Error: $($_.Exception.Message)" -ForegroundColor Red
+                }
+            }
+        }
+    } else {
+        Write-Host "|  [i]  No skills directory found" -ForegroundColor Gray
+    }
+
+    Write-Host "[DONE]"
+    Write-Host ""
+    Write-Host "[OK] Installation complete!" -ForegroundColor Green
+    Write-Host "  Installed: $InstalledCount items"
+    Write-Host "  Skipped: $SkippedCount items (already exist)"
+    Write-Host ""
+    Write-Host "You can now use the /ccs command in Claude CLI for task delegation." -ForegroundColor Cyan
+    Write-Host "Example: /ccs glm /plan 'add user authentication'" -ForegroundColor Cyan
+}
+
 # Special case: version command (check BEFORE profile detection)
 # Check both $ProfileOrFlag and first element of $RemainingArgs
 $FirstArg = if ($ProfileOrFlag -ne "default") { $ProfileOrFlag } elseif ($RemainingArgs.Count -gt 0) { $RemainingArgs[0] } else { $null }
@@ -44,6 +140,12 @@ if ($FirstArg -eq "--help" -or $FirstArg -eq "-h" -or $FirstArg -eq "help") {
         Write-Host $_.Exception.Message
         exit 1
     }
+}
+
+# Special case: install command (check BEFORE profile detection)
+if ($FirstArg -eq "--install") {
+    Install-CommandsAndSkills
+    exit $LASTEXITCODE
 }
 
 # Smart profile detection: if first arg starts with '-', it's a flag not a profile

@@ -1,13 +1,13 @@
 ---
 allowed-tools: Glob, Read, Bash(jq:*), Task
-description: Delegate commands to alternative models (GLM, Haiku) for token optimization
+description: Delegate commands to alternative models (GLM) for token optimization
 argument-hint: [profile] /command [args...]
-model: haiku
+model: sonnet
 ---
 
 # /ccs - Delegate to Alternative Models
 
-You are a **delegation orchestrator**. Your job is to delegate the user's command to an alternative AI model (GLM, Haiku, etc.) using the CCS (Claude Code Switch) system.
+You are a **delegation orchestrator**. Your job is to delegate the user's command to an alternative AI model (GLM, etc.) using the CCS (Claude Code Switch) system.
 
 ## User's Input
 
@@ -20,14 +20,14 @@ Follow these steps to delegate the command:
 ### Step 1: Parse Arguments
 
 Extract from the user's input:
-- **Profile**: Model profile to use (e.g., `glm`, `haiku`, `son`) - defaults to `glm` if omitted
+- **Profile**: Model profile to use (e.g., `glm`, `son`) - defaults to `glm` if omitted
 - **Command**: The slash command to delegate (e.g., `plan`, `code`, `debug`)
 - **Arguments**: Additional arguments to pass to the command
 
 **Examples**:
 - `/ccs glm /plan "add auth"` → profile=`glm`, command=`plan`, args=`"add auth"`
 - `/ccs /code "fix bug"` → profile=`glm` (default), command=`code`, args=`"fix bug"`
-- `/ccs haiku /ask "what is X?"` → profile=`haiku`, command=`ask`, args=`"what is X?"`
+- `/ccs glm /ask "what is X?"` → profile=`glm`, command=`ask`, args=`"what is X?"`
 
 ### Step 2: Validate Profile
 
@@ -48,23 +48,11 @@ Usage: /ccs [profile] /command [args]
 Example: /ccs glm /plan "add authentication"
 ```
 
-### Step 3: Resolve Command Path
+### Step 3: Validate Command
 
-Find the command file in this priority order:
-1. **User-scope**: `~/.ccs/commands/<command>.md`
-2. **Project-scope**: `.claude/commands/<command>.md`
+The command will be executed in the launched Claude instance, which will look for `<command>.md` in the project's `.claude/commands/` directory.
 
-Use Glob tool to check both locations. If not found in either:
-
-```
-❌ Error: Command '/<command>' not found
-
-Searched locations:
-  - ~/.ccs/commands/<command>.md (user-scope)
-  - .claude/commands/<command>.md (project-scope)
-
-Check command name spelling or create the command file.
-```
+**Note**: If the command doesn't exist in the target project, the Claude instance will fail with an appropriate error message.
 
 ### Step 4: Launch Subagent with Task Tool
 
@@ -74,7 +62,7 @@ Use the Task tool to delegate execution:
 ```typescript
 {
   subagent_type: "general-purpose",
-  model: "haiku",
+  model: "sonnet",
   description: "Delegating /<command> to <profile> profile",
   prompt: `You are executing a delegated command via CCS (Claude Code Switch).
 
@@ -82,7 +70,6 @@ Use the Task tool to delegate execution:
 - Profile: <profile>
 - Command: /<command>
 - Arguments: <args>
-- Command file: <resolved-path>
 
 **CRITICAL**: Before executing, switch to the CCS profile:
 \`\`\`bash
@@ -91,9 +78,8 @@ ccs <profile>
 
 **Instructions**:
 1. Run \`ccs <profile>\` to switch to the correct model
-2. Read the command file at <resolved-path>
-3. Execute the command with arguments: <args>
-4. Provide a clear summary of what was accomplished
+2. Execute the command with arguments: <args>
+3. Provide a clear summary of what was accomplished
 
 Execute now.`
 }
@@ -159,18 +145,16 @@ ccs --version
 User: /ccs glm /plan "add user authentication"
 You: Parse → profile=glm, command=plan, args="add user authentication"
      Validate → Check glm exists in config ✓
-     Resolve → Find ~/.ccs/commands/plan.md ✓
      Launch → Task tool with ccs glm
      Return → Formatted result
 ```
 
-**Example 2**: Quick question with Haiku
+**Example 2**: Quick question with GLM
 ```
-User: /ccs haiku /ask "explain JWT tokens"
-You: Parse → profile=haiku, command=ask, args="explain JWT tokens"
-     Validate → Check haiku exists ✓
-     Resolve → Find command ✓
-     Launch → Delegate to haiku
+User: /ccs glm /ask "explain JWT tokens"
+You: Parse → profile=glm, command=ask, args="explain JWT tokens"
+     Validate → Check glm exists ✓
+     Launch → Delegate to glm
      Return → Result
 ```
 
@@ -187,11 +171,10 @@ You: Parse → profile=glm (default), command=debug, args="API 500 error"
 - Each delegation creates an **isolated subagent session**
 - The subagent switches to the specified CCS profile automatically
 - **Token optimization** is the primary benefit
-- User-scope commands (`~/.ccs/commands/`) are checked first
-- Project-scope commands (`.claude/commands/`) are fallback
+- Commands are resolved by the launched Claude instance from the project's `.claude/commands/` directory
+- If a command doesn't exist, the Claude instance will fail with an error
 
 ## Related Documentation
 
-- Setup guide: `tools/ccs/SETUP-DELEGATION.md`
 - Delegation patterns: `tools/ccs/skills/ccs-delegation.md`
 - CCS Tool: `tools/ccs/README.md`

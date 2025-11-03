@@ -53,7 +53,24 @@ irm ccs.kaitran.ca/install | iex
 ccs              # Dùng Claude subscription (mặc định)
 ccs glm          # Dùng GLM fallback
 ccs --version    # Hiển thị phiên bản CCS
+ccs --install    # Cài đặt lệnh và kỹ năng CCS vào ~/.claude/
 ```
+
+### Delegation Tác Vụ
+
+CCS bao gồm delegation tác vụ thông minh qua meta-command `/ccs`:
+
+```bash
+# Sau khi chạy ccs --install, bạn có thể dùng:
+/ccs glm /plan "add user authentication"
+/ccs glm /code "implement auth endpoints"
+/ccs glm /ask "explain this error"
+```
+
+**Lợi ích**:
+- ✅ Tiết kiệm tokens bằng cách delegation tác vụ đơn giản cho model rẻ hơn
+- ✅ Dùng đúng model cho từng tác vụ tự động
+- ✅ Tích hợp liền mạch với workflows hiện có
 
 ## Triết Lý
 

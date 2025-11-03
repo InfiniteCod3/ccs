@@ -1,11 +1,11 @@
 ---
 name: ccs-delegation
-description: Use this skill when the user invokes the `/ccs` command or requests delegating tasks to alternative models (GLM, Haiku) for token optimization. This skill guides when and how to delegate commands to save primary model tokens.
+description: Use this skill when the user invokes the `/ccs` command or requests delegating tasks to alternative models (GLM) for token optimization. This skill guides when and how to delegate commands to save primary model tokens.
 ---
 
 # CCS Delegation
 
-Intelligent task delegation to alternative AI models (GLM, Haiku, etc.) for token optimization using the `/ccs` meta-command.
+Intelligent task delegation to alternative AI models (GLM, etc.) for token optimization using the `/ccs` meta-command.
 
 ## Purpose
 
@@ -19,7 +19,7 @@ The `/ccs` command delegates simple tasks to alternative models while staying in
 Load this skill when:
 - User explicitly invokes `/ccs [profile] /command [args]`
 - User requests delegating tasks to alternative models
-- User asks to use GLM/Haiku for a task
+- User asks to use GLM for a task
 - User requests token conservation strategies
 
 ## Decision Framework
@@ -125,11 +125,6 @@ Claude: "Delegating to GLM (default profile) for implementation."
 - Routine fixes
 - Default choice for simple tasks
 
-**Haiku (haiku profile)**:
-- Quick questions
-- Simple explanations
-- Fast, lightweight tasks
-- When speed matters
 
 **Sonnet (son profile)**:
 - Don't delegate—use directly
@@ -145,7 +140,7 @@ Claude: "Delegating to GLM (default profile) for implementation."
 
 **Examples**:
 - `/ccs glm /plan "add user authentication"`
-- `/ccs haiku /ask "explain JWT tokens"`
+- `/ccs glm /ask "explain JWT tokens"`
 - `/ccs /code "implement feature"` (defaults to glm)
 
 ## Error Handling

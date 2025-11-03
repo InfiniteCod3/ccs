@@ -77,6 +77,42 @@ ccs glm /code "implement feature"
 ```bash
 ccs --version    # Show CCS version
 ccs --help       # Show Claude CLI help
+ccs --install    # Install CCS commands and skills to ~/.claude/
+```
+
+### Installing Commands and Skills
+
+To use the task delegation feature, you need to install the CCS commands and skills to your Claude CLI directory:
+
+```bash
+# Install CCS delegation commands and skills
+ccs --install
+```
+
+This will:
+- Copy `/ccs` command to `~/.claude/commands/ccs.md`
+- Copy `ccs-delegation` skill to `~/.claude/skills/ccs-delegation/`
+- Skip existing files (won't overwrite your customizations)
+
+**Output Example**:
+```
+┌─ Installing CCS Commands & Skills
+│  Source: /path/to/ccs/.claude
+│  Target: /home/user/.claude
+│
+│  Installing commands...
+│  │  ✓  Installed command: ccs.md
+│
+│  Installing skills...
+│  │  ✓  Installed skill: ccs-delegation
+└─
+
+✓ Installation complete!
+  Installed: 2 items
+  Skipped: 0 items (already exist)
+
+You can now use the /ccs command in Claude CLI for task delegation.
+Example: /ccs glm /plan 'add user authentication'
 ```
 
 ## Task Delegation

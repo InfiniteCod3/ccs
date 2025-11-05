@@ -398,7 +398,7 @@ if [[ "$INSTALL_METHOD" == "standalone" ]]; then
     exit 1
   fi
 
-  if curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/ccs -o "$CCS_DIR/ccs"; then
+  if curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/lib/ccs -o "$CCS_DIR/ccs"; then
     chmod +x "$CCS_DIR/ccs"
     ln -sf "$CCS_DIR/ccs" "$INSTALL_DIR/ccs"
     echo "|  [OK] Downloaded executable"

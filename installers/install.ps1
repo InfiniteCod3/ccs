@@ -220,7 +220,7 @@ if ($InstallMethod -eq "standalone") {
 
     try {
         $BaseUrl = "https://raw.githubusercontent.com/kaitranntt/ccs/main"
-        Invoke-WebRequest -Uri "$BaseUrl/ccs.ps1" -OutFile "$CcsDir\ccs.ps1" -UseBasicParsing
+        Invoke-WebRequest -Uri "$BaseUrl/lib/ccs.ps1" -OutFile "$CcsDir\ccs.ps1" -UseBasicParsing
         Write-Host "|  [OK] Downloaded ccs.ps1"
     } catch {
         Write-Host "|"

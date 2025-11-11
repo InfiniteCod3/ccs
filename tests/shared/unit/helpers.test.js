@@ -1,7 +1,7 @@
 const assert = require('assert');
 const path = require('path');
 const os = require('os');
-const { expandPath } = require('../../../bin/helpers');
+const { expandPath } = require('../../../bin/utils/helpers');
 
 describe('helpers', () => {
   describe('expandPath', () => {

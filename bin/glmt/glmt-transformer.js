@@ -7,13 +7,18 @@ const path = require('path');
 const os = require('os');
 const SSEParser = require('./sse-parser');
 const DeltaAccumulator = require('./delta-accumulator');
+const LocaleEnforcer = require('./locale-enforcer');
+const BudgetCalculator = require('./budget-calculator');
+const TaskClassifier = require('./task-classifier');
 
 /**
- * GlmtTransformer - Convert between Anthropic and OpenAI formats with thinking support
+ * GlmtTransformer - Convert between Anthropic and OpenAI formats with thinking and tool support
  *
  * Features:
- * - Request: Anthropic → OpenAI (inject reasoning params)
+ * - Request: Anthropic → OpenAI (inject reasoning params, transform tools)
  * - Response: OpenAI reasoning_content → Anthropic thinking blocks
+ * - Tool Support: Anthropic tools ↔ OpenAI function calling (bidirectional)
+ * - Streaming: Real-time tool calls with input_json deltas
  * - Debug mode: Log raw data to ~/.ccs/logs/ (CCS_DEBUG_LOG=1)
  * - Verbose mode: Console logging with timestamps
  * - Validation: Self-test transformation results
@@ -38,6 +43,18 @@ class GlmtTransformer {
       'GLM-4.5': 96000,
       'GLM-4.5-air': 16000
     };
+    // Effort level thresholds (budget_tokens)
+    this.EFFORT_LOW_THRESHOLD = 2048;
+    this.EFFORT_HIGH_THRESHOLD = 8192;
+
+    // Initialize locale enforcer
+    this.localeEnforcer = new LocaleEnforcer({
+      forceEnglish: process.env.CCS_GLMT_FORCE_ENGLISH !== 'false'
+    });
+
+    // Initialize budget calculator and task classifier
+    this.budgetCalculator = new BudgetCalculator();
+    this.taskClassifier = new TaskClassifier();
   }
 
   /**
@@ -50,24 +67,71 @@ class GlmtTransformer {
     this._writeDebugLog('request-anthropic', anthropicRequest);
 
     try {
-      // 1. Extract thinking control from messages
+      // 1. Extract thinking control from messages (tags like <Thinking:On|Off>)
       const thinkingConfig = this._extractThinkingControl(
         anthropicRequest.messages || []
       );
-      this.log(`Extracted thinking control: ${JSON.stringify(thinkingConfig)}`);
+      const hasControlTags = this._hasThinkingTags(anthropicRequest.messages || []);
 
-      // 2. Map model
+      // 2. Classify task type for intelligent thinking control
+      const taskType = this.taskClassifier.classify(anthropicRequest.messages || []);
+      this.log(`Task classified as: ${taskType}`);
+
+      // 3. Check budget and decide if thinking should be enabled
+      const envBudget = process.env.CCS_GLMT_THINKING_BUDGET;
+      const shouldThink = this.budgetCalculator.shouldEnableThinking(taskType, envBudget);
+      this.log(`Budget decision: thinking=${shouldThink} (budget: ${envBudget || 'default'}, type: ${taskType})`);
+
+      // Apply budget-based thinking control ONLY if:
+      // - No Claude CLI thinking parameter AND
+      // - No control tags in messages AND
+      // - Budget env var is explicitly set
+      if (!anthropicRequest.thinking && !hasControlTags && envBudget) {
+        thinkingConfig.thinking = shouldThink;
+        this.log('Applied budget-based thinking control');
+      }
+
+      // 4. Check anthropicRequest.thinking parameter (takes precedence over budget)
+      // Claude CLI sends this when alwaysThinkingEnabled is configured
+      if (anthropicRequest.thinking) {
+        if (anthropicRequest.thinking.type === 'enabled') {
+          thinkingConfig.thinking = true;
+          this.log('Claude CLI explicitly enabled thinking (overrides budget)');
+        } else if (anthropicRequest.thinking.type === 'disabled') {
+          thinkingConfig.thinking = false;
+          this.log('Claude CLI explicitly disabled thinking (overrides budget)');
+        } else {
+          this.log(`Warning: Unknown thinking type: ${anthropicRequest.thinking.type}`);
+        }
+      }
+
+      this.log(`Final thinking control: ${JSON.stringify(thinkingConfig)}`);
+
+      // 3. Map model
       const glmModel = this._mapModel(anthropicRequest.model);
 
-      // 3. Convert to OpenAI format
+      // 4. Inject locale instruction before sanitization
+      const messagesWithLocale = this.localeEnforcer.injectInstruction(
+        anthropicRequest.messages || []
+      );
+
+      // 5. Convert to OpenAI format
       const openaiRequest = {
         model: glmModel,
-        messages: this._sanitizeMessages(anthropicRequest.messages || []),
+        messages: this._sanitizeMessages(messagesWithLocale),
         max_tokens: this._getMaxTokens(glmModel),
         stream: anthropicRequest.stream ?? false
       };
 
-      // 4. Preserve optional parameters
+      // 5.5. Transform tools parameter if present
+      if (anthropicRequest.tools && anthropicRequest.tools.length > 0) {
+        openaiRequest.tools = this._transformTools(anthropicRequest.tools);
+        // Always use "auto" as Z.AI doesn't support other modes
+        openaiRequest.tool_choice = "auto";
+        this.log(`Transformed ${anthropicRequest.tools.length} tools for OpenAI format`);
+      }
+
+      // 6. Preserve optional parameters
       if (anthropicRequest.temperature !== undefined) {
         openaiRequest.temperature = anthropicRequest.temperature;
       }
@@ -75,13 +139,13 @@ class GlmtTransformer {
         openaiRequest.top_p = anthropicRequest.top_p;
       }
 
-      // 5. Handle streaming
+      // 7. Handle streaming
       // Keep stream parameter from request
       if (anthropicRequest.stream !== undefined) {
         openaiRequest.stream = anthropicRequest.stream;
       }
 
-      // 6. Inject reasoning parameters
+      // 8. Inject reasoning parameters
       this._injectReasoningParams(openaiRequest, thinkingConfig);
 
       // Log transformed request
@@ -153,11 +217,19 @@ class GlmtTransformer {
       // Handle tool_calls if present
       if (message.tool_calls && message.tool_calls.length > 0) {
         message.tool_calls.forEach(toolCall => {
+          let parsedInput;
+          try {
+            parsedInput = JSON.parse(toolCall.function.arguments || '{}');
+          } catch (parseError) {
+            this.log(`Warning: Invalid JSON in tool arguments: ${parseError.message}`);
+            parsedInput = { _error: 'Invalid JSON', _raw: toolCall.function.arguments };
+          }
+
           content.push({
             type: 'tool_use',
             id: toolCall.id,
             name: toolCall.function.name,
-            input: JSON.parse(toolCall.function.arguments || '{}')
+            input: parsedInput
           });
         });
       }
@@ -169,9 +241,9 @@ class GlmtTransformer {
         content: content,
         model: openaiResponse.model || 'glm-4.6',
         stop_reason: this._mapStopReason(choice.finish_reason),
-        usage: openaiResponse.usage || {
-          input_tokens: 0,
-          output_tokens: 0
+        usage: {
+          input_tokens: openaiResponse.usage?.prompt_tokens || 0,
+          output_tokens: openaiResponse.usage?.completion_tokens || 0
         }
       };
 
@@ -207,57 +279,109 @@ class GlmtTransformer {
 
   /**
    * Sanitize messages for OpenAI API compatibility
-   * Remove thinking blocks and unsupported content types
+   * Convert tool_result blocks to separate tool messages
+   * Filter out thinking blocks
    * @param {Array} messages - Messages array
    * @returns {Array} Sanitized messages
    * @private
    */
   _sanitizeMessages(messages) {
-    return messages.map(msg => {
-      // If content is a string, return as-is
+    const result = [];
+
+    for (const msg of messages) {
+      // If content is a string, add as-is
       if (typeof msg.content === 'string') {
-        return msg;
+        result.push(msg);
+        continue;
       }
 
-      // If content is an array, filter out unsupported types
+      // If content is an array, process blocks
       if (Array.isArray(msg.content)) {
-        const sanitizedContent = msg.content
-          .filter(block => {
-            // Keep only text content for OpenAI
-            // Filter out: thinking, tool_use, tool_result, etc.
-            return block.type === 'text';
-          })
-          .map(block => {
-            // Return just the text content
-            return block;
-          });
+        // Separate tool_result blocks from other content
+        const toolResults = msg.content.filter(block => block.type === 'tool_result');
+        const textBlocks = msg.content.filter(block => block.type === 'text');
+        const toolUseBlocks = msg.content.filter(block => block.type === 'tool_use');
 
-        // If we filtered everything out, return empty string
-        if (sanitizedContent.length === 0) {
-          return {
+        // CRITICAL: Tool messages must come BEFORE user text in OpenAI API
+        // Convert tool_result blocks to OpenAI tool messages FIRST
+        for (const toolResult of toolResults) {
+          result.push({
+            role: 'tool',
+            tool_call_id: toolResult.tool_use_id,
+            content: typeof toolResult.content === 'string'
+              ? toolResult.content
+              : JSON.stringify(toolResult.content)
+          });
+        }
+
+        // Add text content as user/assistant message AFTER tool messages
+        if (textBlocks.length > 0) {
+          const textContent = textBlocks.length === 1
+            ? textBlocks[0].text
+            : textBlocks.map(b => b.text).join('\n');
+
+          result.push({
+            role: msg.role,
+            content: textContent
+          });
+        }
+
+        // Add tool_use blocks (assistant's tool calls) - skip for now, they're in assistant messages
+        // OpenAI handles these differently in response, not request
+
+        // If no content at all, add empty message (but not if we added tool messages)
+        if (textBlocks.length === 0 && toolResults.length === 0 && toolUseBlocks.length === 0) {
+          result.push({
             role: msg.role,
             content: ''
-          };
+          });
         }
 
-        // If only one text block, convert to string
-        if (sanitizedContent.length === 1 && sanitizedContent[0].type === 'text') {
-          return {
-            role: msg.role,
-            content: sanitizedContent[0].text
-          };
-        }
-
-        // Return array of text blocks
-        return {
-          role: msg.role,
-          content: sanitizedContent
-        };
+        continue;
       }
 
       // Fallback: return message as-is
-      return msg;
-    });
+      result.push(msg);
+    }
+
+    return result;
+  }
+
+  /**
+   * Transform Anthropic tools to OpenAI tools format
+   * @param {Array} anthropicTools - Anthropic tools array
+   * @returns {Array} OpenAI tools array
+   * @private
+   */
+  _transformTools(anthropicTools) {
+    return anthropicTools.map(tool => ({
+      type: 'function',
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.input_schema || {}
+      }
+    }));
+  }
+
+  /**
+   * Check if messages contain thinking control tags
+   * @param {Array} messages - Messages array
+   * @returns {boolean} True if tags found
+   * @private
+   */
+  _hasThinkingTags(messages) {
+    for (const msg of messages) {
+      if (msg.role !== 'user') continue;
+      const content = msg.content;
+      if (typeof content !== 'string') continue;
+
+      // Check for control tags
+      if (/<Thinking:(On|Off)>/i.test(content) || /<Effort:(Low|Medium|High)>/i.test(content)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -432,9 +556,30 @@ class GlmtTransformer {
   transformDelta(openaiEvent, accumulator) {
     const events = [];
 
+    // Debug logging for streaming deltas
+    if (this.debugLog && openaiEvent.data) {
+      this._writeDebugLog('delta-openai', openaiEvent.data);
+    }
+
     // Handle [DONE] marker
+    // Only finalize if we haven't already (deferred finalization may have already triggered)
     if (openaiEvent.event === 'done') {
-      return this.finalizeDelta(accumulator);
+      if (!accumulator.finalized) {
+        return this.finalizeDelta(accumulator);
+      }
+      return []; // Already finalized
+    }
+
+    // Usage update (appears in final chunk, may be before choice data)
+    // Process this BEFORE early returns to ensure we capture usage
+    if (openaiEvent.data?.usage) {
+      accumulator.updateUsage(openaiEvent.data.usage);
+
+      // If we have both usage AND finish_reason, finalize immediately
+      if (accumulator.finishReason) {
+        events.push(...this.finalizeDelta(accumulator));
+        return events; // Early return after finalization
+      }
     }
 
     const choice = openaiEvent.data?.choices?.[0];
@@ -498,14 +643,97 @@ class GlmtTransformer {
       ));
     }
 
-    // Usage update (appears in final chunk usually)
-    if (openaiEvent.data.usage) {
-      accumulator.updateUsage(openaiEvent.data.usage);
+    // Check for planning loop after each thinking block completes
+    if (accumulator.checkForLoop()) {
+      this.log('WARNING: Planning loop detected - 3 consecutive thinking blocks with no tool calls');
+      this.log('Forcing early finalization to prevent unbounded planning');
+
+      // Close current block if any
+      const currentBlock = accumulator.getCurrentBlock();
+      if (currentBlock && !currentBlock.stopped) {
+        if (currentBlock.type === 'thinking') {
+          events.push(this._createSignatureDeltaEvent(currentBlock));
+        }
+        events.push(this._createContentBlockStopEvent(currentBlock));
+        accumulator.stopCurrentBlock();
+      }
+
+      // Force finalization
+      events.push(...this.finalizeDelta(accumulator));
+      return events;
+    }
+
+    // Tool calls deltas
+    if (delta.tool_calls && delta.tool_calls.length > 0) {
+      // Close current content block ONCE before processing any tool calls
+      const currentBlock = accumulator.getCurrentBlock();
+      if (currentBlock && !currentBlock.stopped) {
+        if (currentBlock.type === 'thinking') {
+          events.push(this._createSignatureDeltaEvent(currentBlock));
+        }
+        events.push(this._createContentBlockStopEvent(currentBlock));
+        accumulator.stopCurrentBlock();
+      }
+
+      // Process each tool call delta
+      for (const toolCallDelta of delta.tool_calls) {
+        // Track tool call state
+        const isNewToolCall = !accumulator.toolCallsIndex[toolCallDelta.index];
+        accumulator.addToolCallDelta(toolCallDelta);
+
+        // Emit tool use events (start + input_json deltas)
+        if (isNewToolCall) {
+          // Start new tool_use block in accumulator
+          const block = accumulator.startBlock('tool_use');
+          const toolCall = accumulator.toolCallsIndex[toolCallDelta.index];
+
+          events.push({
+            event: 'content_block_start',
+            data: {
+              type: 'content_block_start',
+              index: block.index,
+              content_block: {
+                type: 'tool_use',
+                id: toolCall.id || `tool_${toolCallDelta.index}`,
+                name: toolCall.function.name || ''
+              }
+            }
+          });
+        }
+
+        // Emit input_json delta if arguments present
+        if (toolCallDelta.function?.arguments) {
+          const currentToolBlock = accumulator.getCurrentBlock();
+          if (currentToolBlock && currentToolBlock.type === 'tool_use') {
+            events.push({
+              event: 'content_block_delta',
+              data: {
+                type: 'content_block_delta',
+                index: currentToolBlock.index,
+                delta: {
+                  type: 'input_json_delta',
+                  partial_json: toolCallDelta.function.arguments
+                }
+              }
+            });
+          }
+        }
+      }
     }
 
     // Finish reason
     if (choice.finish_reason) {
       accumulator.finishReason = choice.finish_reason;
+
+      // If we have both finish_reason AND usage, finalize immediately
+      if (accumulator.usageReceived) {
+        events.push(...this.finalizeDelta(accumulator));
+      }
+    }
+
+    // Debug logging for generated events
+    if (this.debugLog && events.length > 0) {
+      this._writeDebugLog('delta-anthropic-events', { events, accumulator: accumulator.getSummary() });
     }
 
     return events;
@@ -523,7 +751,7 @@ class GlmtTransformer {
 
     const events = [];
 
-    // Close current content block if any
+    // Close current content block if any (including tool_use blocks)
     const currentBlock = accumulator.getCurrentBlock();
     if (currentBlock && !currentBlock.stopped) {
       if (currentBlock.type === 'thinking') {
@@ -532,6 +760,9 @@ class GlmtTransformer {
       events.push(this._createContentBlockStopEvent(currentBlock));
       accumulator.stopCurrentBlock();
     }
+
+    // No need to manually stop tool_use blocks - they're now tracked in contentBlocks
+    // and will be stopped by the logic above if they're the current block
 
     // Message delta (stop reason + usage)
     events.push({
@@ -542,6 +773,7 @@ class GlmtTransformer {
           stop_reason: this._mapStopReason(accumulator.finishReason || 'stop')
         },
         usage: {
+          input_tokens: accumulator.inputTokens,
           output_tokens: accumulator.outputTokens
         }
       }
@@ -639,17 +871,20 @@ class GlmtTransformer {
   }
 
   /**
-   * Create signature_delta event
+   * Create thinking signature delta event
    * @private
    */
   _createSignatureDeltaEvent(block) {
     const signature = this._generateThinkingSignature(block.content);
     return {
-      event: 'signature_delta',
+      event: 'content_block_delta',
       data: {
-        type: 'signature_delta',
+        type: 'content_block_delta',
         index: block.index,
-        signature: signature
+        delta: {
+          type: 'thinking_signature_delta',
+          signature: signature
+        }
       }
     };
   }

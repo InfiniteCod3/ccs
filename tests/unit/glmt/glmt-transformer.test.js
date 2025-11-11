@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-const GlmtTransformer = require('../bin/glmt-transformer');
+const GlmtTransformer = require('../../../bin/glmt/glmt-transformer');
 
 /**
  * Simple test runner (no external dependencies)
@@ -344,6 +344,171 @@ runner.test('validates transformation without thinking block', () => {
   assertEqual(validation.passed, 4, '4 checks should pass (no thinking)');
   assertEqual(validation.checks.hasThinking, false, 'hasThinking should be false');
   assertEqual(validation.checks.hasText, true, 'hasText should be true');
+});
+
+// Test 19: Handle anthropicRequest.thinking parameter with type=enabled
+runner.test('processes thinking parameter with type=enabled', () => {
+  const transformer = new GlmtTransformer();
+  const input = {
+    model: 'claude-sonnet-4.5',
+    messages: [{ role: 'user', content: 'Test question' }],
+    thinking: {
+      type: 'enabled',
+      budget_tokens: 1024
+    }
+  };
+
+  const { openaiRequest, thinkingConfig } = transformer.transformRequest(input);
+
+  assertEqual(thinkingConfig.thinking, true, 'thinking should be enabled');
+  // Note: effort no longer dynamically set from budget_tokens (Z.AI doesn't support reasoning_effort)
+  assertEqual(openaiRequest.reasoning, true, 'reasoning should be in OpenAI request');
+});
+
+// Test 20: Handle anthropicRequest.thinking parameter with type=disabled
+runner.test('processes thinking parameter with type=disabled', () => {
+  const transformer = new GlmtTransformer();
+  const input = {
+    model: 'claude-sonnet-4.5',
+    messages: [{ role: 'user', content: 'Test question' }],
+    thinking: {
+      type: 'disabled'
+    }
+  };
+
+  const { openaiRequest, thinkingConfig } = transformer.transformRequest(input);
+
+  assertEqual(thinkingConfig.thinking, false, 'thinking should be disabled');
+  assertEqual(openaiRequest.reasoning, undefined, 'reasoning should not be in request');
+});
+
+// Test 21: Budget tokens no longer mapped to effort (Z.AI doesn't support reasoning_effort)
+runner.test('ignores budget_tokens (Z.AI does not support reasoning_effort)', () => {
+  const transformer = new GlmtTransformer();
+  const input = {
+    model: 'claude-sonnet-4.5',
+    messages: [{ role: 'user', content: 'Test' }],
+    thinking: {
+      type: 'enabled',
+      budget_tokens: 2048
+    }
+  };
+
+  const { thinkingConfig, openaiRequest } = transformer.transformRequest(input);
+
+  // Z.AI only supports binary thinking (reasoning: true/false), not effort levels
+  assertEqual(thinkingConfig.thinking, true, 'thinking should be enabled');
+  assertEqual(openaiRequest.reasoning, true, 'reasoning should be true in API request');
+});
+
+// Test 22: Budget tokens mapping - medium effort (2049-8192)
+runner.test('maps budget_tokens 2049-8192 to medium effort', () => {
+  const transformer = new GlmtTransformer();
+  const input = {
+    model: 'claude-sonnet-4.5',
+    messages: [{ role: 'user', content: 'Test' }],
+    thinking: {
+      type: 'enabled',
+      budget_tokens: 4096
+    }
+  };
+
+  const { thinkingConfig } = transformer.transformRequest(input);
+
+  assertEqual(thinkingConfig.effort, 'medium', 'effort should be medium at budget=4096');
+});
+
+// Test 23: Verify thinking parameter works regardless of budget_tokens value
+runner.test('thinking.type controls API behavior (budget_tokens ignored)', () => {
+  const transformer = new GlmtTransformer();
+  const input = {
+    model: 'claude-sonnet-4.5',
+    messages: [{ role: 'user', content: 'Test' }],
+    thinking: {
+      type: 'enabled',
+      budget_tokens: 16384
+    }
+  };
+
+  const { thinkingConfig, openaiRequest } = transformer.transformRequest(input);
+
+  // Only thinking.type matters for Z.AI API
+  assertEqual(thinkingConfig.thinking, true, 'thinking should be enabled');
+  assertEqual(openaiRequest.reasoning, true, 'reasoning should be true');
+});
+
+// Test 24: thinking parameter without budget_tokens
+runner.test('handles thinking parameter without budget_tokens', () => {
+  const transformer = new GlmtTransformer();
+  const input = {
+    model: 'claude-sonnet-4.5',
+    messages: [{ role: 'user', content: 'Test' }],
+    thinking: {
+      type: 'enabled'
+    }
+  };
+
+  const { thinkingConfig } = transformer.transformRequest(input);
+
+  assertEqual(thinkingConfig.thinking, true, 'thinking should be enabled');
+  // Effort should remain default (not overridden)
+  assertExists(thinkingConfig.effort, 'effort should exist with default value');
+});
+
+// Test 25: thinking parameter takes precedence over message tags
+runner.test('thinking parameter overrides message tags', () => {
+  const transformer = new GlmtTransformer();
+  const input = {
+    model: 'claude-sonnet-4.5',
+    messages: [{
+      role: 'user',
+      content: '<Thinking:Off> <Effort:High> Test question'
+    }],
+    thinking: {
+      type: 'enabled',
+      budget_tokens: 1024
+    }
+  };
+
+  const { thinkingConfig, openaiRequest } = transformer.transformRequest(input);
+
+  // thinking parameter should win over tags
+  assertEqual(thinkingConfig.thinking, true, 'thinking param should override tag');
+  assertEqual(openaiRequest.reasoning, true, 'reasoning should be enabled in API request');
+});
+
+// Test 26: Message tags still work when no thinking parameter present
+runner.test('message tags work when thinking parameter absent', () => {
+  const transformer = new GlmtTransformer();
+  const input = {
+    model: 'claude-sonnet-4.5',
+    messages: [{
+      role: 'user',
+      content: '<Thinking:On> <Effort:Medium> Test question'
+    }]
+  };
+
+  const { thinkingConfig } = transformer.transformRequest(input);
+
+  assertEqual(thinkingConfig.thinking, true, 'tag should enable thinking');
+  assertEqual(thinkingConfig.effort, 'medium', 'tag should set medium effort');
+});
+
+// Test 27: thinking parameter with invalid type (edge case)
+runner.test('handles invalid thinking type gracefully', () => {
+  const transformer = new GlmtTransformer();
+  const input = {
+    model: 'claude-sonnet-4.5',
+    messages: [{ role: 'user', content: 'Test' }],
+    thinking: {
+      type: 'invalid'
+    }
+  };
+
+  const { thinkingConfig } = transformer.transformRequest(input);
+
+  // Should fall back to default behavior (not crash)
+  assertExists(thinkingConfig, 'thinkingConfig should exist');
 });
 
 // Run tests

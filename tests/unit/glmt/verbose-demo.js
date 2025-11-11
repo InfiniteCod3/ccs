@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-const GlmtTransformer = require('../bin/glmt-transformer');
+const GlmtTransformer = require('../../../bin/glmt/glmt-transformer');
 
 console.log('=== Demo: Verbose Output with Reasoning Detection ===\n');
 

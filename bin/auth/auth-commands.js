@@ -2,9 +2,9 @@
 
 const { spawn } = require('child_process');
 const ProfileRegistry = require('./profile-registry');
-const InstanceManager = require('./instance-manager');
-const { colored } = require('./helpers');
-const { detectClaudeCli } = require('./claude-detector');
+const InstanceManager = require('../management/instance-manager');
+const { colored } = require('../utils/helpers');
+const { detectClaudeCli } = require('../utils/claude-detector');
 
 /**
  * Auth Commands (Simplified)

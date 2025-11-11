@@ -25,6 +25,10 @@ class DeltaAccumulator {
     this.contentBlocks = [];
     this.currentBlockIndex = -1;
 
+    // Tool calls tracking
+    this.toolCalls = [];
+    this.toolCallsIndex = {};
+
     // Buffers
     this.thinkingBuffer = '';
     this.textBuffer = '';
@@ -33,9 +37,14 @@ class DeltaAccumulator {
     this.maxBlocks = options.maxBlocks || 100;
     this.maxBufferSize = options.maxBufferSize || 10 * 1024 * 1024; // 10MB
 
+    // Loop detection configuration
+    this.loopDetectionThreshold = options.loopDetectionThreshold || 3;
+    this.loopDetected = false;
+
     // State flags
     this.messageStarted = false;
     this.finalized = false;
+    this.usageReceived = false; // Track if usage data has arrived
 
     // Statistics
     this.inputTokens = 0;
@@ -56,7 +65,7 @@ class DeltaAccumulator {
 
   /**
    * Start new content block
-   * @param {string} type - Block type ('thinking' or 'text')
+   * @param {string} type - Block type ('thinking', 'text', or 'tool_use')
    * @returns {Object} New block
    */
   startBlock(type) {
@@ -75,7 +84,7 @@ class DeltaAccumulator {
     };
     this.contentBlocks.push(block);
 
-    // Reset buffer for new block
+    // Reset buffer for new block (tool_use doesn't use buffers)
     if (type === 'thinking') {
       this.thinkingBuffer = '';
     } else if (type === 'text') {
@@ -128,7 +137,102 @@ class DeltaAccumulator {
     if (usage) {
       this.inputTokens = usage.prompt_tokens || usage.input_tokens || 0;
       this.outputTokens = usage.completion_tokens || usage.output_tokens || 0;
+      this.usageReceived = true; // Mark that we've received usage data
     }
+  }
+
+  /**
+   * Add or update tool call delta
+   * @param {Object} toolCallDelta - Tool call delta from OpenAI
+   */
+  addToolCallDelta(toolCallDelta) {
+    const index = toolCallDelta.index;
+
+    // Initialize tool call if not exists
+    if (!this.toolCallsIndex[index]) {
+      const toolCall = {
+        index: index,
+        id: '',
+        type: 'function',
+        function: {
+          name: '',
+          arguments: ''
+        }
+      };
+      this.toolCalls.push(toolCall);
+      this.toolCallsIndex[index] = toolCall;
+    }
+
+    const toolCall = this.toolCallsIndex[index];
+
+    // Update id if present
+    if (toolCallDelta.id) {
+      toolCall.id = toolCallDelta.id;
+    }
+
+    // Update type if present
+    if (toolCallDelta.type) {
+      toolCall.type = toolCallDelta.type;
+    }
+
+    // Update function name if present
+    if (toolCallDelta.function?.name) {
+      toolCall.function.name += toolCallDelta.function.name;
+    }
+
+    // Update function arguments if present
+    if (toolCallDelta.function?.arguments) {
+      toolCall.function.arguments += toolCallDelta.function.arguments;
+    }
+  }
+
+  /**
+   * Get all tool calls
+   * @returns {Array} Tool calls array
+   */
+  getToolCalls() {
+    return this.toolCalls;
+  }
+
+  /**
+   * Check for planning loop pattern
+   * Loop = N consecutive thinking blocks with no tool calls
+   * @returns {boolean} True if loop detected
+   */
+  checkForLoop() {
+    // Already detected loop
+    if (this.loopDetected) {
+      return true;
+    }
+
+    // Need minimum blocks to detect pattern
+    if (this.contentBlocks.length < this.loopDetectionThreshold) {
+      return false;
+    }
+
+    // Get last N blocks
+    const recentBlocks = this.contentBlocks.slice(-this.loopDetectionThreshold);
+
+    // Check if all recent blocks are thinking blocks
+    const allThinking = recentBlocks.every(b => b.type === 'thinking');
+
+    // Check if no tool calls have been made at all
+    const noToolCalls = this.toolCalls.length === 0;
+
+    // Loop detected if: all recent blocks are thinking AND no tool calls yet
+    if (allThinking && noToolCalls) {
+      this.loopDetected = true;
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Reset loop detection state (for testing)
+   */
+  resetLoopDetection() {
+    this.loopDetected = false;
   }
 
   /**
@@ -142,8 +246,10 @@ class DeltaAccumulator {
       role: this.role,
       blockCount: this.contentBlocks.length,
       currentIndex: this.currentBlockIndex,
+      toolCallCount: this.toolCalls.length,
       messageStarted: this.messageStarted,
       finalized: this.finalized,
+      loopDetected: this.loopDetected,
       usage: {
         input_tokens: this.inputTokens,
         output_tokens: this.outputTokens

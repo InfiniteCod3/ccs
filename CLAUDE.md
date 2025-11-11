@@ -30,11 +30,13 @@ CCS (Claude Code Switch): CLI wrapper for instant switching between multiple Cla
 
 ## Architecture
 
-### v3.4 GLMT Streaming
+### v3.5 GLMT Tool Support & Streaming
 
-**Streaming support added**: Real-time delivery of reasoning content
+**Tool support added**: MCP tools and function calling fully supported
 
-**Architecture**: Embedded HTTP proxy with bidirectional streaming
+**Streaming support added**: Real-time delivery of reasoning content and tool calls
+
+**Architecture**: Embedded HTTP proxy with bidirectional format transformation
 
 **[!] Important**: GLMT only available in Node.js version (`bin/ccs.js`). Native shell versions (`lib/ccs`, `lib/ccs.ps1`) do not support GLMT yet (requires HTTP server).
 
@@ -44,6 +46,11 @@ CCS (Claude Code Switch): CLI wrapper for instant switching between multiple Cla
 3. Modifies `glmt.settings.json`: `ANTHROPIC_BASE_URL=http://127.0.0.1:<port>`
 4. Spawns Claude CLI with modified settings
 5. Proxy intercepts requests (streaming or buffered):
+   - **Tool Transformation** (bidirectional):
+     - Anthropic tools → OpenAI function calling format
+     - OpenAI tool_calls → Anthropic tool_use blocks
+     - Streaming tool calls with input_json deltas
+     - MCP tools execute correctly (no XML tag output)
    - **Streaming mode** (default):
      - `SSEParser` parses incremental SSE events from Z.AI
      - `DeltaAccumulator` tracks content block state
@@ -53,24 +60,44 @@ CCS (Claude Code Switch): CLI wrapper for instant switching between multiple Cla
      - Waits for complete response
      - Single transformation pass
      - Higher latency (2-10s TTFB)
-6. Thinking blocks appear in Claude Code UI (real-time or complete)
+6. Thinking blocks and tool calls appear in Claude Code UI (real-time or complete)
+
+**Thinking parameter support**:
+- Claude CLI `thinking` parameter recognized and processed
+- Parameter precedence: Claude CLI `thinking` > message tags > default
+- `thinking.type`: 'enabled'/'disabled' controls reasoning blocks
+- `thinking.budget_tokens` mapped to effort levels:
+  - <= 2048: low effort
+  - <= 8192: medium effort
+  - > 8192: high effort
+- Input validation: logs warnings for invalid values
+- Backward compatible: control tags still work
 
 **Files**:
 - `bin/glmt-proxy.js` (463 lines): HTTP proxy server with streaming
-- `bin/glmt-transformer.js` (685 lines): Format conversion + delta handling
+- `bin/glmt-transformer.js` (685 lines): Format conversion + delta handling + tool transformation + control mechanisms
+- `bin/locale-enforcer.js` (85 lines): Force English output (prevents Chinese responses)
+- `bin/budget-calculator.js` (109 lines): Thinking on/off based on task type + budget
+- `bin/task-classifier.js` (146 lines): Classify tasks (reasoning vs execution)
 - `bin/sse-parser.js` (97 lines): SSE stream parser
-- `bin/delta-accumulator.js` (156 lines): State tracking for streaming
+- `bin/delta-accumulator.js` (156 lines): State tracking for streaming + tool calls + loop detection
 - `config/base-glmt.settings.json`: Template with Z.AI endpoint
-- `tests/glmt-transformer.test.js`: Unit tests
+- `tests/glmt-transformer.test.js`: Unit tests (110 tests passing)
 
 **Control tags**:
 - `<Thinking:On|Off>` - Enable/disable reasoning
-- `<Effort:Low|Medium|High>` - Control reasoning depth
+- `<Effort:Low|Medium|High>` - Control reasoning depth (deprecated - Z.AI only supports binary thinking)
 
 **Environment variables**:
 - `CCS_GLMT_STREAMING=disabled` - Force buffered mode
 - `CCS_GLMT_STREAMING=force` - Force streaming (override client)
 - `CCS_DEBUG_LOG=1` - Enable debug file logging
+- `CCS_GLMT_FORCE_ENGLISH=true` - Force English output (default: true)
+- `CCS_GLMT_THINKING_BUDGET=8192` - Control thinking on/off based on task type
+  - 0 or "unlimited": Always enable thinking
+  - 1-2048: Disable thinking (fast execution)
+  - 2049-8192: Enable for reasoning tasks only
+  - >8192: Always enable thinking
 
 **Security limits** (DoS protection):
 - SSE buffer: 1MB max
@@ -79,6 +106,12 @@ CCS (Claude Code Switch): CLI wrapper for instant switching between multiple Cla
 - Request timeout: 120s (both modes)
 
 **Confirmed working**: Z.AI (1498 reasoning chunks tested)
+
+**Control mechanisms** (v3.6):
+1. **Locale enforcement**: Injects "MUST respond in English" into system prompts to prevent Chinese output
+2. **Budget control**: Thinking on/off based on task type + budget (Z.AI only supports binary thinking, NOT effort levels)
+3. **Task classification**: Keywords-based (reasoning vs execution) - triggers thinking for problem-solving tasks
+4. **Loop detection**: Triggers after 3 consecutive thinking blocks with no tool calls (prevents unbounded planning loops)
 
 ### v3.1 Shared Data
 
@@ -340,7 +373,26 @@ All values = strings (not booleans/objects) to prevent PowerShell crashes.
 **No Thinking Blocks**:
 - Check Z.AI API plan supports reasoning_content
 - Verify `<Thinking:On>` tag not overridden
+- Check `CCS_GLMT_THINKING_BUDGET` value (default: 8192 - reasoning tasks only)
+- Set `CCS_GLMT_THINKING_BUDGET=0` or `CCS_GLMT_THINKING_BUDGET=unlimited` to always enable thinking
 - Test with `ccs glm` (no thinking) to isolate proxy issues
+
+**Chinese Output / Unexpected Language**:
+- Default: `CCS_GLMT_FORCE_ENGLISH=true` (enabled)
+- Disable: `export CCS_GLMT_FORCE_ENGLISH=false`
+- Locale enforcer injects "MUST respond in English" into system prompts
+
+**Unbounded Planning Loops**:
+- Loop detection triggers after 3 consecutive thinking blocks with no tool calls
+- Token waste mitigation: Budget control disables thinking for execution tasks
+- Override: Set `CCS_GLMT_THINKING_BUDGET=0` or `unlimited` to always enable
+
+**Tool Execution Issues**:
+- **MCP tools outputting XML**: Fixed in v3.5 - upgrade CCS
+- **Tool calls not recognized**: Ensure Z.AI API supports function calling
+- **Incomplete tool arguments**: Streaming tool calls require complete JSON accumulation
+- **Tool results not processed**: Check tool_result format matches Anthropic spec
+- Debug with `CCS_DEBUG_LOG=1` to inspect request/response transformation
 
 **Streaming Issues**:
 - Buffer errors: Hit DoS protection limits (1MB SSE, 10MB content)

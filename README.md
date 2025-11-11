@@ -205,9 +205,21 @@ Commands and skills symlinked from `~/.ccs/shared/` - no duplication across prof
 |---------|-----------------|-------------------|
 | **Endpoint** | Anthropic-compatible | OpenAI-compatible |
 | **Thinking** | No | Yes (reasoning_content) |
+| **Tool Support** | Basic | **Full (v3.5+)** |
+| **MCP Tools** | Limited | **Working (v3.5+)** |
 | **Streaming** | Yes | **Yes (v3.4+)** |
 | **TTFB** | <500ms | <500ms (streaming), 2-10s (buffered) |
-| **Use Case** | Fast responses | Complex reasoning |
+| **Use Case** | Fast responses | Complex reasoning + tools |
+
+### Tool Support (v3.5)
+
+**GLMT now fully supports MCP tools and function calling**:
+
+- **Bidirectional Transformation**: Anthropic tools ↔ OpenAI function calling
+- **MCP Integration**: MCP tools execute correctly (no XML tag output)
+- **Streaming Tool Calls**: Real-time tool calls with input_json deltas
+- **Backward Compatible**: Works seamlessly with existing thinking support
+- **No Configuration**: Tool support works automatically
 
 ### Streaming Support (v3.4)
 
@@ -216,21 +228,42 @@ Commands and skills symlinked from `~/.ccs/shared/` - no duplication across prof
 - **Default**: Streaming enabled (TTFB <500ms)
 - **Disable**: Set `CCS_GLMT_STREAMING=disabled` for buffered mode
 - **Force**: Set `CCS_GLMT_STREAMING=force` to override client preferences
+- **Thinking parameter**: Claude CLI `thinking` parameter support
+  - Respects `thinking.type` and `budget_tokens`
+  - Precedence: CLI parameter > message tags > default
 
-**Confirmed working**: Z.AI (1498 reasoning chunks tested)
+**Confirmed working**: Z.AI (1498 reasoning chunks tested, tool calls verified)
 
 ### How It Works
 
 1. CCS spawns embedded HTTP proxy on localhost
 2. Proxy converts Anthropic format → OpenAI format (streaming or buffered)
-3. Forwards to Z.AI with reasoning parameters
-4. Converts `reasoning_content` → thinking blocks (incremental or complete)
-5. Thinking appears in Claude Code UI in real-time
+3. Transforms Anthropic tools → OpenAI function calling format
+4. Forwards to Z.AI with reasoning parameters and tools
+5. Converts `reasoning_content` → thinking blocks (incremental or complete)
+6. Converts OpenAI `tool_calls` → Anthropic tool_use blocks
+7. Thinking and tool calls appear in Claude Code UI in real-time
 
 ### Control Tags
 
 - `<Thinking:On|Off>` - Enable/disable reasoning blocks (default: On)
-- `<Effort:Low|Medium|High>` - Control reasoning depth (default: Medium)
+- `<Effort:Low|Medium|High>` - Control reasoning depth (deprecated - Z.AI only supports binary thinking)
+
+### Environment Variables
+
+**GLMT-specific**:
+- `CCS_GLMT_FORCE_ENGLISH=true` - Force English output (default: true)
+- `CCS_GLMT_THINKING_BUDGET=8192` - Control thinking on/off based on task type
+  - 0 or "unlimited": Always enable thinking
+  - 1-2048: Disable thinking (fast execution)
+  - 2049-8192: Enable for reasoning tasks only (default)
+  - >8192: Always enable thinking
+- `CCS_GLMT_STREAMING=disabled` - Force buffered mode
+- `CCS_GLMT_STREAMING=force` - Force streaming (override client)
+
+**General**:
+- `CCS_DEBUG_LOG=1` - Enable debug file logging
+- `CCS_CLAUDE_PATH=/path/to/claude` - Custom Claude CLI path
 
 ### API Key Setup
 
@@ -376,6 +409,7 @@ irm ccs.kaitran.ca/uninstall | iex
 - [Configuration](./docs/en/configuration.md)
 - [Usage Examples](./docs/en/usage.md)
 - [System Architecture](./docs/system-architecture.md)
+- [GLMT Control Mechanisms](./docs/glmt-controls.md)
 - [Troubleshooting](./docs/en/troubleshooting.md)
 - [Contributing](./CONTRIBUTING.md)
 

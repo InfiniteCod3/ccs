@@ -31,7 +31,10 @@ const DeltaAccumulator = require('./delta-accumulator');
  */
 class GlmtProxy {
   constructor(config = {}) {
-    this.transformer = new GlmtTransformer({ verbose: config.verbose });
+    this.transformer = new GlmtTransformer({
+      verbose: config.verbose,
+      debugLog: config.debugLog || process.env.CCS_DEBUG_LOG === '1'
+    });
     // Use ANTHROPIC_BASE_URL from environment (set by settings.json) or fallback to Z.AI default
     this.upstreamUrl = process.env.ANTHROPIC_BASE_URL || 'https://api.z.ai/api/coding/paas/v4/chat/completions';
     this.server = null;
@@ -117,6 +120,13 @@ class GlmtProxy {
         return;
       }
 
+      // Log thinking parameter for debugging
+      if (anthropicRequest.thinking) {
+        this.log(`Request contains thinking parameter: ${JSON.stringify(anthropicRequest.thinking)}`);
+      } else {
+        this.log(`Request does NOT contain thinking parameter (will use message tags or default)`);
+      }
+
       // Branch: streaming or buffered
       const useStreaming = (anthropicRequest.stream && this.streamingEnabled) || this.forceStreaming;
 
@@ -196,10 +206,16 @@ class GlmtProxy {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*'
+      'Access-Control-Allow-Origin': '*',
+      'X-Accel-Buffering': 'no' // Disable proxy buffering
     });
 
-    this.log('Starting SSE stream to Claude CLI');
+    // Disable Nagle's algorithm to prevent buffering at socket level
+    if (res.socket) {
+      res.socket.setNoDelay(true);
+    }
+
+    this.log('Starting SSE stream to Claude CLI (socket buffering disabled)');
 
     // Forward and stream
     await this._forwardAndStreamUpstream(
@@ -368,11 +384,16 @@ class GlmtProxy {
               // Transform OpenAI delta → Anthropic events
               const anthropicEvents = this.transformer.transformDelta(event, accumulator);
 
-              // Forward to Claude CLI
+              // Forward to Claude CLI with immediate flush
               anthropicEvents.forEach(evt => {
                 const eventLine = `event: ${evt.event}\n`;
                 const dataLine = `data: ${JSON.stringify(evt.data)}\n\n`;
                 clientRes.write(eventLine + dataLine);
+
+                // Flush immediately if method available (HTTP/2 or custom servers)
+                if (typeof clientRes.flush === 'function') {
+                  clientRes.flush();
+                }
               });
             });
           } catch (error) {

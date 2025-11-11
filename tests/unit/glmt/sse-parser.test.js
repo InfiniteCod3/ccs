@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-const SSEParser = require('../bin/sse-parser');
+const SSEParser = require('../../../bin/glmt/sse-parser');
 
 console.log('[TEST] SSEParser unit tests');
 console.log('');

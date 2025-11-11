@@ -271,11 +271,17 @@ GLMT (GLM with Thinking) uses an embedded HTTP proxy to enable thinking mode sup
 
 **1. GLMT Transformer (`bin/glmt-transformer.js`)**
 - Converts Anthropic Messages API → OpenAI Chat Completions format
-- Extracts thinking control tags: `<Thinking:On|Off>`, `<Effort:Low|Medium|High>`
-- Injects reasoning parameters: `reasoning: true`, `reasoning_effort`
+- Extracts thinking control tags: `<Thinking:On|Off>`, `<Effort:Low|Medium|High>` (effort deprecated)
+- Injects reasoning parameters: `reasoning: true` (binary only - Z.AI constraint)
 - Transforms OpenAI `reasoning_content` → Anthropic thinking blocks
 - Generates thinking signatures for Claude Code UI
 - Debug logging to `~/.ccs/logs/` when `CCS_DEBUG_LOG=1`
+
+**Control Mechanisms** (v3.6):
+- **Locale enforcer** (`bin/locale-enforcer.js`): Force English output (prevents Chinese responses)
+- **Budget calculator** (`bin/budget-calculator.js`): Thinking on/off based on task type + budget
+- **Task classifier** (`bin/task-classifier.js`): Classify reasoning vs execution tasks
+- **Loop detection** (`bin/delta-accumulator.js`): Break unbounded planning loops (3 blocks)
 
 **2. GLMT Proxy (`bin/glmt-proxy.js`)**
 - Embedded HTTP server on `127.0.0.1:random_port`
@@ -507,7 +513,12 @@ sequenceDiagram
 bin/                         # CCS source files
 ├── ccs.js                   # Main entry point (v3.3.0)
 ├── glmt-proxy.js            # Embedded HTTP proxy (v3.2.0+)
-├── glmt-transformer.js      # Format conversion (v3.2.0+)
+├── glmt-transformer.js      # Format conversion (v3.2.0+, control mechanisms v3.6)
+├── locale-enforcer.js       # Force English output (v3.6)
+├── budget-calculator.js     # Thinking budget control (v3.6)
+├── task-classifier.js       # Task classification (v3.6)
+├── delta-accumulator.js     # Streaming state + loop detection (v3.6)
+├── sse-parser.js            # SSE stream parser (v3.4+)
 ├── config-manager.js        # Configuration handling
 ├── claude-detector.js       # Claude CLI detection
 ├── instance-manager.js      # Instance orchestration

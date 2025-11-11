@@ -5,11 +5,11 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { error, colored } = require('./helpers');
-const { detectClaudeCli, showClaudeNotFoundError } = require('./claude-detector');
-const { getSettingsPath, getConfigPath } = require('./config-manager');
-const { ErrorManager } = require('./error-manager');
-const RecoveryManager = require('./recovery-manager');
+const { error, colored } = require('./utils/helpers');
+const { detectClaudeCli, showClaudeNotFoundError } = require('./utils/claude-detector');
+const { getSettingsPath, getConfigPath } = require('./utils/config-manager');
+const { ErrorManager } = require('./utils/error-manager');
+const RecoveryManager = require('./management/recovery-manager');
 
 // Version (sync with package.json)
 const CCS_VERSION = require('../package.json').version;
@@ -194,7 +194,7 @@ function handleUninstallCommand() {
 }
 
 async function handleDoctorCommand() {
-  const Doctor = require('./doctor');
+  const Doctor = require('./management/doctor');
   const doctor = new Doctor();
 
   await doctor.runAllChecks();
@@ -216,7 +216,7 @@ function detectProfile(args) {
 
 // Execute Claude CLI with embedded proxy (for GLMT profile)
 async function execClaudeWithProxy(claudeCli, profileName, args) {
-  const { getSettingsPath } = require('./config-manager');
+  const { getSettingsPath } = require('./utils/config-manager');
 
   // 1. Read settings to get API key
   const settingsPath = getSettingsPath(profileName);
@@ -233,9 +233,10 @@ async function execClaudeWithProxy(claudeCli, profileName, args) {
   const verbose = args.includes('--verbose') || args.includes('-v');
 
   // 2. Spawn embedded proxy with verbose flag
-  const proxyPath = path.join(__dirname, 'glmt-proxy.js');
+  const proxyPath = path.join(__dirname, 'glmt', 'glmt-proxy.js');
   const proxyArgs = verbose ? ['--verbose'] : [];
-  const proxy = spawn('node', [proxyPath, ...proxyArgs], {
+  // Use process.execPath for Windows compatibility (CVE-2024-27980)
+  const proxy = spawn(process.execPath, [proxyPath, ...proxyArgs], {
     stdio: ['ignore', 'pipe', verbose ? 'pipe' : 'inherit']
   });
 
@@ -286,16 +287,34 @@ async function execClaudeWithProxy(claudeCli, profileName, args) {
 
   // 4. Spawn Claude CLI with proxy URL
   const envVars = {
-    ...process.env,
     ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}`,
     ANTHROPIC_AUTH_TOKEN: apiKey,
     ANTHROPIC_MODEL: 'glm-4.6'
   };
 
-  const claude = spawn(claudeCli, args, {
-    stdio: 'inherit',
-    env: envVars
-  });
+  // Use existing execClaude helper for consistent Windows handling
+  const isWindows = process.platform === 'win32';
+  const needsShell = isWindows && /\.(cmd|bat|ps1)$/i.test(claudeCli);
+  const env = { ...process.env, ...envVars };
+
+  let claude;
+  if (needsShell) {
+    // When shell needed: concatenate into string to avoid DEP0190 warning
+    const cmdString = [claudeCli, ...args].map(escapeShellArg).join(' ');
+    claude = spawn(cmdString, {
+      stdio: 'inherit',
+      windowsHide: true,
+      shell: true,
+      env
+    });
+  } else {
+    // When no shell needed: use array form (faster, no shell overhead)
+    claude = spawn(claudeCli, args, {
+      stdio: 'inherit',
+      windowsHide: true,
+      env
+    });
+  }
 
   // 5. Cleanup: kill proxy when Claude exits
   claude.on('exit', (code, signal) => {
@@ -358,7 +377,7 @@ async function main() {
 
   // Special case: auth command (multi-account management)
   if (firstArg === 'auth') {
-    const AuthCommands = require('./auth-commands');
+    const AuthCommands = require('./auth/auth-commands');
     const authCommands = new AuthCommands();
     await authCommands.route(args.slice(1));
     return;
@@ -383,10 +402,10 @@ async function main() {
   }
 
   // Use ProfileDetector to determine profile type
-  const ProfileDetector = require('./profile-detector');
-  const InstanceManager = require('./instance-manager');
-  const ProfileRegistry = require('./profile-registry');
-  const { getSettingsPath } = require('./config-manager');
+  const ProfileDetector = require('./auth/profile-detector');
+  const InstanceManager = require('./management/instance-manager');
+  const ProfileRegistry = require('./auth/profile-registry');
+  const { getSettingsPath } = require('./utils/config-manager');
 
   const detector = new ProfileDetector();
 

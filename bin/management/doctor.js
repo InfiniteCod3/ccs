@@ -4,8 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
-const { colored } = require('./helpers');
-const { detectClaudeCli } = require('./claude-detector');
+const { colored } = require('../utils/helpers');
+const { detectClaudeCli } = require('../utils/claude-detector');
 
 /**
  * Health check results

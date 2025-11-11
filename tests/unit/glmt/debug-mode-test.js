@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const GlmtTransformer = require('../bin/glmt-transformer');
+const GlmtTransformer = require('../../../bin/glmt/glmt-transformer');
 
 /**
  * Manual test for debug mode file logging

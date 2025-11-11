@@ -2,11 +2,10 @@ const assert = require('assert');
 const path = require('path');
 const os = require('os');
 
-// Import the expandPath function from bin/helpers.js
-// Note: This might require adjusting based on the actual location of the helper
+// Import the expandPath function from bin/utils/helpers.js
 let expandPath;
 try {
-  expandPath = require('../../bin/helpers').expandPath;
+  expandPath = require('../../bin/utils/helpers').expandPath;
 } catch (e) {
   // If helpers module doesn't exist or doesn't export expandPath, create a mock
   expandPath = function(p) {

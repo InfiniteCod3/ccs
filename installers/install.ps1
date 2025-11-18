@@ -31,7 +31,7 @@ $InstallMethod = if ($ScriptDir -and ((Test-Path "$ScriptDir\lib\ccs.ps1") -or (
 # IMPORTANT: Update this version when releasing new versions!
 # This hardcoded version is used for standalone installations (irm | iex)
 # For git installations, VERSION file is read if available
-$CcsVersion = "4.1.5"
+$CcsVersion = "4.1.6"
 
 # Try to read VERSION file for git installations
 if ($ScriptDir) {
@@ -664,27 +664,27 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
                     manager.install();
                 } catch (err) {
                     console.log('[!] CCS item installation warning: ' + err.message);
-                    console.log('    Run "ccs update" to retry');
+                    console.log('    Run "ccs sync" to retry');
                 }
 "@
                 node -e $scriptBlock 2>$null
                 if (-not $?) {
-                    Write-Host "[!] CCS item installation skipped (run 'ccs update' later)"
+                    Write-Host "[!] CCS item installation skipped (run 'ccs sync' later)"
                 }
             } catch {
                 Write-Host "[!] CCS item installation failed: $($_.Exception.Message)"
-                Write-Host "    Run 'ccs update' after installation to complete setup"
+                Write-Host "    Run 'ccs sync' after installation to complete setup"
             }
         } else {
             Write-Host "[!] claude-symlink-manager.js not found, skipping"
-            Write-Host "    Run 'ccs update' after installation to complete setup"
+            Write-Host "    Run 'ccs sync' after installation to complete setup"
         }
     } else {
         Write-Host "[!] .claude/ folder not found, skipping CCS item installation"
     }
 } else {
     Write-Host "[!] Node.js not found, skipping CCS item installation"
-    Write-Host "    Install Node.js and run 'ccs update' to complete setup"
+    Write-Host "    Install Node.js and run 'ccs sync' to complete setup"
 }
 Write-Host ""
 Write-Host "[i] Note: Windows symlink support requires Developer Mode (v4.2 will add fallback)"

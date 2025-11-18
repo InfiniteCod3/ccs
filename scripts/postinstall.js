@@ -121,7 +121,7 @@ function createConfigFiles() {
       claudeSymlinkManager.install();
     } catch (err) {
       console.warn('[!] CCS item installation warning:', err.message);
-      console.warn('    Run "ccs update" to retry');
+      console.warn('    Run "ccs sync" to retry');
     }
     console.log('');
 

@@ -366,7 +366,7 @@ class Doctor {
           'CCS Symlinks',
           'warning',
           health.issues.join(', '),
-          'Run: ccs update'
+          'Run: ccs sync'
         );
       }
     } catch (e) {
@@ -375,7 +375,7 @@ class Doctor {
         'CCS Symlinks',
         'warning',
         'Could not check CCS symlinks: ' + e.message,
-        'Run: ccs update'
+        'Run: ccs sync'
       );
     }
   }

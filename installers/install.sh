@@ -32,7 +32,7 @@ fi
 # IMPORTANT: Update this version when releasing new versions!
 # This hardcoded version is used for standalone installations (curl | bash)
 # For git installations, VERSION file is read if available
-CCS_VERSION="4.1.5"
+CCS_VERSION="4.1.6"
 
 # Try to read VERSION file for git installations
 if [[ -f "$SCRIPT_DIR/VERSION" ]]; then
@@ -800,19 +800,19 @@ if command -v node &> /dev/null; then
           manager.install();
         } catch (err) {
           console.log('[!] CCS item installation warning: ' + err.message);
-          console.log('    Run \"ccs update\" to retry');
+          console.log('    Run \"ccs sync\" to retry');
         }
-      " 2>/dev/null || echo "[!] CCS item installation skipped (run 'ccs update' later)"
+      " 2>/dev/null || echo "[!] CCS item installation skipped (run 'ccs sync' later)"
     else
       echo "[!] claude-symlink-manager.js not found, skipping"
-      echo "    Run 'ccs update' after installation to complete setup"
+      echo "    Run 'ccs sync' after installation to complete setup"
     fi
   else
     echo "[!] .claude/ folder not found, skipping CCS item installation"
   fi
 else
   echo "[!] Node.js not found, skipping CCS item installation"
-  echo "    Install Node.js and run 'ccs update' to complete setup"
+  echo "    Install Node.js and run 'ccs sync' to complete setup"
 fi
 echo ""
 

@@ -214,10 +214,10 @@ class ClaudeSymlinkManager {
 
       // Check target
       if (!fs.existsSync(targetPath)) {
-        issues.push(`Not installed: ${item.target} (run 'ccs update' to install)`);
+        issues.push(`Not installed: ${item.target} (run 'ccs sync' to install)`);
         healthy = false;
       } else if (!this._isOurSymlink(targetPath, sourcePath)) {
-        issues.push(`Not a CCS symlink: ${item.target} (run 'ccs update' to fix)`);
+        issues.push(`Not a CCS symlink: ${item.target} (run 'ccs sync' to fix)`);
         healthy = false;
       }
     }

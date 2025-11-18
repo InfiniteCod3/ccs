@@ -753,7 +753,7 @@ Status: Installation healthy
 If you modify CCS items or need to re-install symlinks:
 
 ```bash
-ccs update
+ccs sync
 ```
 
 **What it does**:

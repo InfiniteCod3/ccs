@@ -2,6 +2,46 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/)
 
+## [4.1.5] - 2025-11-17
+
+### Added
+- **Sync command** (`ccs sync`) for updating delegation commands and skills
+- **Short flag** `-sc` for `--shell-completion` command
+- **Enhanced version display** with delegation status information
+
+### Changed
+- **Auth help text** now emphasizes concurrent account usage across all platforms
+- **Help text standardization** ensures consistent messaging across bash, PowerShell, and Node.js
+- **Description text** emphasizes running different Claude CLI sessions concurrently
+- **GitHub documentation links** updated to stable permalinks
+- **Shell completions** updated to include sync command and -sc flag
+
+### Fixed
+- **Inconsistent help text** across different platform implementations
+- **Outdated description** text to emphasize concurrent sessions over specific examples
+
+---
+
+## [4.1.4] - 2025-11-17
+
+### Fixed
+- **Shell completion ENOTDIR errors** when parent path conflicts with existing files
+- **Zsh completion syntax errors** with _alternative and _describe functions
+- **Reversed color application** in zsh completion (commands vs descriptions)
+
+### Added
+- **Enhanced shell completion UI/UX** with descriptions and grouping
+- **Color-coded completions** for zsh and fish shells
+- **Custom settings profile support** in shell completions
+- **Improved completion formatting** with section headers and separators
+
+### Changed
+- **Generalized help text** removed specific account examples for broader applicability
+- **Delegation help section** clarified context and removed non-existent commands
+- **Shell completion organization** grouped by categories (commands, model profiles, account profiles)
+
+---
+
 ## [4.1.3] - 2025-11-17
 
 ### Fixed

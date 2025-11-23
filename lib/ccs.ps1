@@ -12,7 +12,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 # Version (updated by scripts/bump-version.sh)
-$CcsVersion = "4.3.5"
+$CcsVersion = "4.3.6"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigFile = if ($env:CCS_CONFIG) { $env:CCS_CONFIG } else { "$env:USERPROFILE\.ccs\config.json" }
 $ProfilesJson = "$env:USERPROFILE\.ccs\profiles.json"
@@ -269,7 +269,8 @@ function Show-Help {
     Write-Host "  Commands:    ~/.ccs/shared/commands/"
     Write-Host "  Skills:      ~/.ccs/shared/skills/"
     Write-Host "  Agents:      ~/.ccs/shared/agents/"
-    Write-Host "  Note: Commands, skills, and agents are symlinked across all profiles"
+    Write-Host "  Plugins:     ~/.ccs/shared/plugins/"
+    Write-Host "  Note: Commands, skills, agents, and plugins are symlinked across all profiles"
     Write-Host ""
 
     Write-ColorLine "Examples:" "Cyan"

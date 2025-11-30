@@ -64,7 +64,6 @@
     "test:unit": "mocha 'tests/**/unit/**/*.test.js' 'tests/unit/**/*.test.js' --timeout 5000",
     "test:npm": "mocha tests/npm/**/*.test.js --timeout 10000",
     "test:native": "bash tests/native/unix/edge-cases.sh",
-    "test:edge-cases": "bash tests/edge-cases.sh",
     "prepublishOnly": "npm run validate && node scripts/sync-version.js",
     "prepack": "npm run validate && node scripts/sync-version.js",
     "prepare": "node scripts/check-executables.js",

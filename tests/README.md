@@ -2,90 +2,62 @@
 
 ## Organization
 
-- `native/` - Native installation tests only (curl|bash, irm|iex)
-  - `unix/` - Unix/Linux/macOS native tests (37 tests)
-  - `windows/` - Windows PowerShell tests
-- `npm/` - npm package tests only (39 tests)
-  - `postinstall.test.js` - Postinstall behavior tests (Section 10)
-  - `cli.test.js` - CLI argument parsing tests
-  - `cross-platform.test.js` - Cross-platform compatibility tests
-  - `special-commands.test.js` - npm package integration tests
-- `shared/` - Shared utilities, fixtures, and unit tests
-  - `helpers.sh` - Bash test utilities and functions
-  - `test-data.js` - Test data for npm tests
-  - `fixtures/` - Test configuration files
-  - `unit/` - Unit tests for helper functions
-- `unit/` - Module unit tests (GLMT, delegation)
+```
+tests/
+├── unit/              # Module unit tests (Mocha)
+│   ├── glmt/          # GLMT transformer tests
+│   └── delegation/    # Delegation module tests
+├── npm/               # npm package tests (Mocha)
+├── native/            # Native installation tests (bash/PowerShell)
+│   ├── unix/          # Unix/Linux/macOS tests
+│   └── windows/       # Windows PowerShell tests
+├── integration/       # Integration tests (manual execution)
+└── shared/            # Shared utilities
+    ├── fixtures/      # Test configuration and environment
+    ├── unit/          # Helper function tests
+    ├── helpers.sh     # Bash test utilities
+    └── test-data.js   # Test data for npm tests
+```
 
 ## Running Tests
 
 ```bash
-bun run test              # All tests (177 total)
-bun run test:unit         # Unit tests only (138)
-bun run test:npm          # npm package tests (39)
-bun run test:native       # Native installation tests (37)
-bun run test:edge-cases   # Master orchestrator (backward compatible)
+bun run test           # All automated tests (unit + npm)
+bun run test:unit      # Unit tests only (Mocha)
+bun run test:npm       # npm package tests (Mocha)
+bun run test:native    # Native Unix tests (bash)
 ```
 
-## Test Structure
+## Test Categories
 
-### Native Tests (`native/`)
-Test the traditional installation methods where CCS is installed via:
-- Unix/Linux/macOS: `curl | bash` → tests `lib/ccs`
-- Windows: `irm | iex` (PowerShell) → tests `lib/ccs.ps1`
-
-These tests use bash/PowerShell scripts and cover Sections 1-9 from the original edge-cases.sh.
-
-**Files**:
-- `native/unix/edge-cases.sh` - 37 native Unix tests
-- `native/windows/edge-cases.ps1` - Windows PowerShell tests
-- `native/unix/install.sh` - Unix installation tests
-- `native/windows/install.ps1` - Windows installation tests
+### Unit Tests (`unit/`)
+Module-level tests using Mocha framework:
+- `unit/glmt/` - GLMT transformer, SSE parser, delta accumulator
+- `unit/delegation/` - Permission mode, session manager, result formatter
 
 ### npm Tests (`npm/`)
-Test the npm package installation where CCS is installed via:
-- npm: `npm install -g @kaitranntt/ccs` → tests `bin/ccs.js`
+npm package functionality tests using Mocha:
+- `postinstall.test.js` - Postinstall behavior
+- `cli.test.js` - CLI argument parsing
+- `cross-platform.test.js` - Cross-platform compatibility
+- `special-commands.test.js` - Integration tests
 
-These tests use Node.js/mocha framework and include Section 10 (postinstall) plus CLI tests.
+### Native Tests (`native/`)
+Installation tests for curl|bash (Unix) and irm|iex (Windows):
+- `native/unix/edge-cases.sh` - Unix edge case tests
+- `native/windows/edge-cases.ps1` - Windows edge case tests
 
-**Files**:
-- `npm/postinstall.test.js` - 6 postinstall behavior tests (Section 10)
-- `npm/cli.test.js` - 15 CLI argument parsing tests
-- `npm/cross-platform.test.js` - 13 cross-platform compatibility tests
-- `npm/special-commands.test.js` - 5 integration tests for npm package
+### Integration Tests (`integration/`)
+Manual execution tests for specific scenarios:
+- `token-counting-test.js` - Token counting validation
+- `z-ai-streaming-test.js` - Z.AI streaming
+- `glmt-integration-test.sh` - GLMT integration
+- `symlink-chain-test.sh` - Symlink chain handling
+- `ux-integration-test.sh` - CLI UX integration
 
-### Shared Resources (`shared/`)
-Common test code, data, and helper functions shared across test suites to avoid duplication.
+## Adding New Tests
 
-**Files**:
-- `shared/helpers.sh` - Bash test utilities and functions
-- `shared/test-data.js` - Test data for npm tests
-- `shared/fixtures/` - Test configuration files
-- `shared/unit/` - Unit tests for helper functions
-- `unit/glmt/` - GLMT transformer unit tests
-- `unit/delegation/` - Delegation module unit tests
-
-## Test Counts
-
-| Test Type | Count | Location |
-|-----------|-------|----------|
-| Native Unix | 37 | `native/unix/` |
-| npm Package | 39 | `npm/` |
-| Unit Tests | 138 | `shared/unit/`, `unit/glmt/`, `unit/delegation/` |
-| **Total** | **177** | **All suites** |
-
-## Backward Compatibility
-
-All existing commands still work:
-- `bash tests/edge-cases.sh` - Master orchestrator (runs all tests)
-- `npm test` - Now runs comprehensive test suite
-- No breaking changes to existing workflows
-
-## Migration Notes
-
-This restructure solves the original problem where Section 10 (npm postinstall tests) was buried in the native `edge-cases.sh` file. Now:
-- ✅ Clear separation: npm tests in `npm/`, native in `native/`
-- ✅ Targeted execution: `npm run test:npm` vs `npm run test:native`
-- ✅ Better organization: Obvious where to add new tests
-- ✅ DRY principle: Shared utilities in `shared/`
-- ✅ Increased coverage: From 41 to 177 tests
+- **Unit tests**: Add to `unit/<module>/` using Mocha + Node.js assert
+- **npm tests**: Add to `npm/` using Mocha
+- **Native tests**: Add to `native/unix/` or `native/windows/`
+- **Integration tests**: Add to `integration/`

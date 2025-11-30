@@ -144,8 +144,8 @@ git checkout -b your-feature-name
 # Test locally with ./ccs
 
 # Run tests
-./tests/edge-cases.sh  # Unix
-./tests/edge-cases.ps1 # Windows
+bun run test           # All tests
+bun run test:native    # Native Unix tests only
 ```
 
 #### Testing npm Package Locally

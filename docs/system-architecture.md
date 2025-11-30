@@ -1094,11 +1094,11 @@ graph TD
 
 ```
 tests/
-├── shared/
-│   ├── unit/           # Unit tests for individual modules
-│   └── fixtures/       # Test data and configurations
+├── unit/              # Module unit tests (GLMT, delegation)
+├── shared/            # Shared utilities and fixtures
 ├── npm/               # npm package-specific tests
-└── edge-cases.sh      # Comprehensive scenario testing
+├── native/            # Native installation tests (bash/PowerShell)
+└── integration/       # Integration tests
 ```
 
 ### Test Coverage Strategy

@@ -1,7 +1,7 @@
 const assert = require('assert');
 const { execSync } = require('child_process');
 const path = require('path');
-const { createTestEnvironment } = require('../fixtures/test-environment');
+const { createTestEnvironment } = require('../shared/fixtures/test-environment');
 
 describe('npm postinstall', () => {
   let testEnv;

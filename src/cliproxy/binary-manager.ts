@@ -6,6 +6,7 @@
  * - Verifies SHA256 checksum
  * - Extracts and caches binary locally
  * - Supports retry logic with exponential backoff
+ * - Auto-checks for updates on startup (fetches latest from GitHub API)
  *
  * Pattern: Mirrors npm install behavior (fast check, download only when needed)
  */
@@ -17,7 +18,7 @@ import * as http from 'http';
 import * as crypto from 'crypto';
 import * as zlib from 'zlib';
 import { ProgressIndicator } from '../utils/progress-indicator';
-import { getBinDir } from './config-generator';
+import { getBinDir, getCliproxyDir } from './config-generator';
 import {
   BinaryInfo,
   BinaryManagerConfig,
@@ -31,12 +32,33 @@ import {
   getChecksumsUrl,
   getExecutableName,
   getArchiveBinaryName,
-  CLIPROXY_VERSION,
+  CLIPROXY_FALLBACK_VERSION,
 } from './platform-detector';
+
+/** Cache duration for version check (1 hour in milliseconds) */
+const VERSION_CACHE_DURATION_MS = 60 * 60 * 1000;
+
+/** GitHub API URL for latest release */
+const GITHUB_API_LATEST_RELEASE =
+  'https://api.github.com/repos/router-for-me/CLIProxyAPI/releases/latest';
+
+/** Version cache file structure */
+interface VersionCache {
+  latestVersion: string;
+  checkedAt: number;
+}
+
+/** Update check result */
+interface UpdateCheckResult {
+  hasUpdate: boolean;
+  currentVersion: string;
+  latestVersion: string;
+  fromCache: boolean;
+}
 
 /** Default configuration */
 const DEFAULT_CONFIG: BinaryManagerConfig = {
-  version: CLIPROXY_VERSION,
+  version: CLIPROXY_FALLBACK_VERSION,
   releaseUrl: 'https://github.com/router-for-me/CLIProxyAPI/releases/download',
   binPath: getBinDir(),
   maxRetries: 3,
@@ -56,7 +78,7 @@ export class BinaryManager {
   }
 
   /**
-   * Ensure binary is available (download if missing)
+   * Ensure binary is available (download if missing, update if outdated)
    * @returns Path to executable binary
    */
   async ensureBinary(): Promise<string> {
@@ -65,14 +87,239 @@ export class BinaryManager {
     // Check if binary already exists
     if (fs.existsSync(binaryPath)) {
       this.log(`Binary exists: ${binaryPath}`);
-      return binaryPath;
+
+      // Check for updates in background (non-blocking for UX)
+      try {
+        const updateResult = await this.checkForUpdates();
+        if (updateResult.hasUpdate) {
+          console.log(
+            `[i] CLIProxyAPI update available: v${updateResult.currentVersion} -> v${updateResult.latestVersion}`
+          );
+          console.log(`[i] Updating CLIProxyAPI...`);
+
+          // Delete old binary and download new version
+          this.deleteBinary();
+          this.config.version = updateResult.latestVersion;
+          await this.downloadAndInstall();
+        }
+      } catch (error) {
+        // Silent fail - don't block startup if update check fails
+        const err = error as Error;
+        this.log(`Update check failed (non-blocking): ${err.message}`);
+      }
+
+      return this.getBinaryPath();
     }
 
     // Download, verify, extract
     this.log('Binary not found, downloading...');
+
+    // Check latest version before first download
+    try {
+      const latestVersion = await this.fetchLatestVersion();
+      if (latestVersion && this.isNewerVersion(latestVersion, this.config.version)) {
+        this.log(`Using latest version: ${latestVersion} (instead of ${this.config.version})`);
+        this.config.version = latestVersion;
+      }
+    } catch {
+      // Use pinned version if API fails
+      this.log(`Using pinned version: ${this.config.version}`);
+    }
+
     await this.downloadAndInstall();
 
     return binaryPath;
+  }
+
+  /**
+   * Check for updates by comparing installed version with latest release
+   * Uses cache to avoid hitting GitHub API on every run
+   */
+  async checkForUpdates(): Promise<UpdateCheckResult> {
+    const currentVersion = this.getInstalledVersion();
+
+    // Try cache first
+    const cachedVersion = this.getCachedLatestVersion();
+    if (cachedVersion) {
+      this.log(`Using cached version: ${cachedVersion}`);
+      return {
+        hasUpdate: this.isNewerVersion(cachedVersion, currentVersion),
+        currentVersion,
+        latestVersion: cachedVersion,
+        fromCache: true,
+      };
+    }
+
+    // Fetch from GitHub API
+    const latestVersion = await this.fetchLatestVersion();
+    this.cacheLatestVersion(latestVersion);
+
+    return {
+      hasUpdate: this.isNewerVersion(latestVersion, currentVersion),
+      currentVersion,
+      latestVersion,
+      fromCache: false,
+    };
+  }
+
+  /**
+   * Fetch latest version from GitHub API
+   */
+  private async fetchLatestVersion(): Promise<string> {
+    const response = await this.fetchJson(GITHUB_API_LATEST_RELEASE);
+
+    // Extract version from tag_name (format: "v6.5.27" or "6.5.27")
+    const tagName = response.tag_name as string;
+    if (!tagName) {
+      throw new Error('No tag_name in GitHub API response');
+    }
+
+    return tagName.replace(/^v/, '');
+  }
+
+  /**
+   * Fetch JSON from URL (for GitHub API)
+   */
+  private fetchJson(url: string): Promise<Record<string, unknown>> {
+    return new Promise((resolve, reject) => {
+      const options = {
+        headers: {
+          'User-Agent': 'CCS-CLIProxyAPI-Updater/1.0',
+          Accept: 'application/vnd.github.v3+json',
+        },
+      };
+
+      const handleResponse = (res: http.IncomingMessage) => {
+        if (res.statusCode === 301 || res.statusCode === 302) {
+          const redirectUrl = res.headers.location;
+          if (!redirectUrl) {
+            reject(new Error('Redirect without location header'));
+            return;
+          }
+          this.fetchJson(redirectUrl).then(resolve).catch(reject);
+          return;
+        }
+
+        if (res.statusCode !== 200) {
+          reject(new Error(`GitHub API error: HTTP ${res.statusCode}`));
+          return;
+        }
+
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(data));
+          } catch {
+            reject(new Error('Invalid JSON from GitHub API'));
+          }
+        });
+        res.on('error', reject);
+      };
+
+      const req = https.get(url, options, handleResponse);
+      req.on('error', reject);
+      req.setTimeout(10000, () => {
+        req.destroy();
+        reject(new Error('GitHub API timeout (10s)'));
+      });
+    });
+  }
+
+  /**
+   * Get installed version from version file or fallback to pinned
+   */
+  private getInstalledVersion(): string {
+    const versionFile = path.join(this.config.binPath, '.version');
+    if (fs.existsSync(versionFile)) {
+      try {
+        return fs.readFileSync(versionFile, 'utf8').trim();
+      } catch {
+        return this.config.version;
+      }
+    }
+    return this.config.version;
+  }
+
+  /**
+   * Save installed version to file
+   */
+  private saveInstalledVersion(version: string): void {
+    const versionFile = path.join(this.config.binPath, '.version');
+    try {
+      fs.writeFileSync(versionFile, version, 'utf8');
+    } catch {
+      // Silent fail - not critical
+    }
+  }
+
+  /**
+   * Get cached latest version if still valid
+   */
+  private getCachedLatestVersion(): string | null {
+    const cachePath = this.getVersionCachePath();
+    if (!fs.existsSync(cachePath)) {
+      return null;
+    }
+
+    try {
+      const content = fs.readFileSync(cachePath, 'utf8');
+      const cache: VersionCache = JSON.parse(content);
+
+      // Check if cache is still valid
+      if (Date.now() - cache.checkedAt < VERSION_CACHE_DURATION_MS) {
+        return cache.latestVersion;
+      }
+
+      // Cache expired
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Cache latest version for future checks
+   */
+  private cacheLatestVersion(version: string): void {
+    const cachePath = this.getVersionCachePath();
+    const cache: VersionCache = {
+      latestVersion: version,
+      checkedAt: Date.now(),
+    };
+
+    try {
+      fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+      fs.writeFileSync(cachePath, JSON.stringify(cache), 'utf8');
+    } catch {
+      // Silent fail - caching is optional
+    }
+  }
+
+  /**
+   * Get path to version cache file
+   */
+  private getVersionCachePath(): string {
+    return path.join(getCliproxyDir(), '.version-cache.json');
+  }
+
+  /**
+   * Compare semver versions (true if latest > current)
+   */
+  private isNewerVersion(latest: string, current: string): boolean {
+    const latestParts = latest.split('.').map((p) => parseInt(p, 10) || 0);
+    const currentParts = current.split('.').map((p) => parseInt(p, 10) || 0);
+
+    // Pad arrays to same length
+    while (latestParts.length < 3) latestParts.push(0);
+    while (currentParts.length < 3) currentParts.push(0);
+
+    for (let i = 0; i < 3; i++) {
+      if (latestParts[i] > currentParts[i]) return true;
+      if (latestParts[i] < currentParts[i]) return false;
+    }
+
+    return false; // Equal versions
   }
 
   /**
@@ -114,7 +361,7 @@ export class BinaryManager {
    * Download and install binary
    */
   private async downloadAndInstall(): Promise<void> {
-    const platform = detectPlatform();
+    const platform = detectPlatform(this.config.version);
     const downloadUrl = getDownloadUrl(this.config.version);
     const checksumsUrl = getChecksumsUrl(this.config.version);
 
@@ -177,6 +424,9 @@ export class BinaryManager {
         fs.chmodSync(binaryPath, 0o755);
         this.log(`Set executable permissions: ${binaryPath}`);
       }
+
+      // Save installed version for future update checks
+      this.saveInstalledVersion(this.config.version);
 
       console.log(`[OK] CLIProxyAPI v${this.config.version} installed successfully`);
     } catch (error) {

@@ -1,3 +1,10 @@
+# [5.2.0-beta.2](https://github.com/kaitranntt/ccs/compare/v5.2.0-beta.1...v5.2.0-beta.2) (2025-12-01)
+
+
+### Features
+
+* **cliproxy:** auto-update cliproxyapi to latest release on startup ([8873ccd](https://github.com/kaitranntt/ccs/commit/8873ccd981679e8acff8965accdc22215c6e4aa2))
+
 # [5.2.0-beta.1](https://github.com/kaitranntt/ccs/compare/v5.1.1-beta.3...v5.2.0-beta.1) (2025-12-01)
 
 

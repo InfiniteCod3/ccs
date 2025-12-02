@@ -284,7 +284,7 @@ async function main(): Promise<void> {
   // Detect Claude CLI first (needed for all paths)
   const claudeCli = detectClaudeCli();
   if (!claudeCli) {
-    ErrorManager.showClaudeNotFound();
+    await ErrorManager.showClaudeNotFound();
     process.exit(1);
   }
 
@@ -341,7 +341,7 @@ async function main(): Promise<void> {
     // Check if this is a profile not found error with suggestions
     if (err.profileName && err.availableProfiles !== undefined) {
       const allProfiles = err.availableProfiles.split('\n');
-      ErrorManager.showProfileNotFound(err.profileName, allProfiles, err.suggestions);
+      await ErrorManager.showProfileNotFound(err.profileName, allProfiles, err.suggestions);
     } else {
       console.error(`[X] ${err.message}`);
     }

@@ -1,4 +1,4 @@
-import { colored } from './helpers';
+import { initUI, header, color, dim, errorBox } from './ui';
 import { ERROR_CODES, getErrorDocUrl, ErrorCode } from './error-codes';
 
 /**
@@ -23,60 +23,70 @@ export class ErrorManager {
    * Show error code and documentation URL
    */
   static showErrorCode(errorCode: ErrorCode): void {
-    console.error(colored(`Error: ${errorCode}`, 'yellow'));
-    console.error(colored(getErrorDocUrl(errorCode), 'yellow'));
+    console.error(dim(`Error: ${errorCode}`));
+    console.error(dim(getErrorDocUrl(errorCode)));
     console.error('');
   }
 
   /**
    * Show Claude CLI not found error
    */
-  static showClaudeNotFound(): void {
+  static async showClaudeNotFound(): Promise<void> {
+    await initUI();
+
     console.error('');
-    console.error(colored('[X] Claude CLI not found', 'red'));
+    console.error(
+      errorBox(
+        'Claude CLI not found\n\n' +
+          'CCS requires Claude CLI to be installed\n' +
+          'and available in PATH.',
+        'ERROR'
+      )
+    );
     console.error('');
-    console.error('CCS requires Claude CLI to be installed and available in PATH.');
+
+    console.error(header('SOLUTIONS'));
     console.error('');
-    console.error(colored('Solutions:', 'yellow'));
-    console.error('  1. Install Claude CLI:');
-    console.error('     https://docs.claude.com/en/docs/claude-code/installation');
+    console.error('  1. Install Claude CLI');
+    console.error(`     ${color('https://docs.claude.com/install', 'path')}`);
     console.error('');
-    console.error('  2. Verify installation:');
-    console.error('     command -v claude   (Unix)');
-    console.error('     Get-Command claude  (Windows)');
+    console.error('  2. Verify installation');
+    console.error(`     ${color('command -v claude', 'command')}   (Unix)`);
+    console.error(`     ${color('Get-Command claude', 'command')}  (Windows)`);
     console.error('');
-    console.error('  3. Custom path (if installed elsewhere):');
-    console.error('     export CCS_CLAUDE_PATH="/path/to/claude"');
+    console.error('  3. Custom path (if installed elsewhere)');
+    console.error(`     ${color('export CCS_CLAUDE_PATH="/path/to/claude"', 'command')}`);
     console.error('');
+
     this.showErrorCode(ERROR_CODES.CLAUDE_NOT_FOUND);
   }
 
   /**
    * Show settings file not found error
    */
-  static showSettingsNotFound(settingsPath: string): void {
+  static async showSettingsNotFound(settingsPath: string): Promise<void> {
+    await initUI();
+
     const isClaudeSettings =
       settingsPath.includes('.claude') && settingsPath.endsWith('settings.json');
 
     console.error('');
-    console.error(colored('[X] Settings file not found', 'red'));
-    console.error('');
-    console.error(`File: ${settingsPath}`);
+    console.error(errorBox('Settings file not found\n\n' + `File: ${settingsPath}`, 'ERROR'));
     console.error('');
 
     if (isClaudeSettings) {
       console.error('This file is auto-created when you login to Claude CLI.');
       console.error('');
-      console.error(colored('Solutions:', 'yellow'));
-      console.error(`  echo '{}' > ${settingsPath}`);
-      console.error('  claude /login');
+      console.error(header('SOLUTIONS'));
+      console.error(`  ${color(`echo '{}' > ${settingsPath}`, 'command')}`);
+      console.error(`  ${color('claude /login', 'command')}`);
       console.error('');
-      console.error('Why: Newer Claude CLI versions require explicit login.');
+      console.error(dim('Why: Newer Claude CLI versions require explicit login.'));
     } else {
-      console.error(colored('Solutions:', 'yellow'));
-      console.error('  npm install -g @kaitranntt/ccs --force');
+      console.error(header('SOLUTIONS'));
+      console.error(`  ${color('npm install -g @kaitranntt/ccs --force', 'command')}`);
       console.error('');
-      console.error('This will recreate missing profile settings.');
+      console.error(dim('This will recreate missing profile settings.'));
     }
 
     console.error('');
@@ -86,120 +96,139 @@ export class ErrorManager {
   /**
    * Show invalid configuration error
    */
-  static showInvalidConfig(configPath: string, errorDetail: string): void {
+  static async showInvalidConfig(configPath: string, errorDetail: string): Promise<void> {
+    await initUI();
+
     console.error('');
-    console.error(colored('[X] Configuration invalid', 'red'));
+    console.error(
+      errorBox(
+        'Configuration invalid\n\n' + `File: ${configPath}\n` + `Issue: ${errorDetail}`,
+        'ERROR'
+      )
+    );
     console.error('');
-    console.error(`File: ${configPath}`);
-    console.error(`Issue: ${errorDetail}`);
+
+    console.error(header('SOLUTIONS'));
     console.error('');
-    console.error(colored('Solutions:', 'yellow'));
-    console.error('  # Backup corrupted file');
-    console.error(`  mv ${configPath} ${configPath}.backup`);
+    console.error(`  ${dim('# Backup corrupted file')}`);
+    console.error(`  ${color(`mv ${configPath} ${configPath}.backup`, 'command')}`);
     console.error('');
-    console.error('  # Reinstall CCS');
-    console.error('  npm install -g @kaitranntt/ccs --force');
+    console.error(`  ${dim('# Reinstall CCS')}`);
+    console.error(`  ${color('npm install -g @kaitranntt/ccs --force', 'command')}`);
     console.error('');
-    console.error('Your profile settings will be preserved.');
+    console.error(dim('Your profile settings will be preserved.'));
     console.error('');
+
     this.showErrorCode(ERROR_CODES.CONFIG_INVALID_JSON);
   }
 
   /**
    * Show profile not found error
    */
-  static showProfileNotFound(
+  static async showProfileNotFound(
     profileName: string,
     availableProfiles: string[],
     suggestions: string[] = []
-  ): void {
+  ): Promise<void> {
+    await initUI();
+
     console.error('');
-    console.error(colored(`[X] Profile '${profileName}' not found`, 'red'));
+    console.error(errorBox(`Profile '${profileName}' not found`, 'ERROR'));
     console.error('');
 
     if (suggestions && suggestions.length > 0) {
-      console.error(colored('Did you mean:', 'yellow'));
-      suggestions.forEach((s) => console.error(`  ${s}`));
+      console.error(header('DID YOU MEAN'));
+      suggestions.forEach((s) => console.error(`  ${color(s, 'command')}`));
       console.error('');
     }
 
-    console.error(colored('Available profiles:', 'cyan'));
-    availableProfiles.forEach((line) => console.error(`  ${line}`));
+    console.error(header('AVAILABLE PROFILES'));
+    availableProfiles.forEach((line) => console.error(`  ${color(line, 'info')}`));
     console.error('');
-    console.error(colored('Solutions:', 'yellow'));
-    console.error('  # Use existing profile');
-    console.error('  ccs <profile> "your prompt"');
+
+    console.error(header('SOLUTIONS'));
     console.error('');
-    console.error('  # Create new account profile');
-    console.error('  ccs auth create <name>');
+    console.error('  Use an existing profile:');
+    console.error(`    ${color('ccs <profile> "your prompt"', 'command')}`);
     console.error('');
+    console.error('  Create a new account profile:');
+    console.error(`    ${color('ccs auth create <name>', 'command')}`);
+    console.error('');
+
     this.showErrorCode(ERROR_CODES.PROFILE_NOT_FOUND);
   }
 
   /**
    * Show permission denied error
    */
-  static showPermissionDenied(path: string): void {
+  static async showPermissionDenied(filePath: string): Promise<void> {
+    await initUI();
+
     console.error('');
-    console.error(colored('[X] Permission denied', 'red'));
+    console.error(errorBox('Permission denied\n\n' + `Cannot write to: ${filePath}`, 'ERROR'));
     console.error('');
-    console.error(`Cannot write to: ${path}`);
+
+    console.error(header('SOLUTIONS'));
     console.error('');
-    console.error(colored('Solutions:', 'yellow'));
-    console.error('  # Fix ownership');
-    console.error('  sudo chown -R $USER ~/.ccs ~/.claude');
+    console.error(`  ${dim('# Fix ownership')}`);
+    console.error(`  ${color('sudo chown -R $USER ~/.ccs ~/.claude', 'command')}`);
     console.error('');
-    console.error('  # Fix permissions');
-    console.error('  chmod 755 ~/.ccs ~/.claude');
+    console.error(`  ${dim('# Fix permissions')}`);
+    console.error(`  ${color('chmod 755 ~/.ccs ~/.claude', 'command')}`);
     console.error('');
-    console.error('  # Retry installation');
-    console.error('  npm install -g @kaitranntt/ccs --force');
+    console.error(`  ${dim('# Retry installation')}`);
+    console.error(`  ${color('npm install -g @kaitranntt/ccs --force', 'command')}`);
     console.error('');
+
     this.showErrorCode(ERROR_CODES.FS_CANNOT_WRITE_FILE);
   }
 
   /**
    * Show CLIProxy OAuth timeout error
    */
-  static showOAuthTimeout(provider: string): void {
+  static async showOAuthTimeout(provider: string): Promise<void> {
+    await initUI();
+
     console.error('');
-    console.error(colored('+---------------------------------------------------------+', 'red'));
-    console.error(colored('|                   OAuth Timeout                         |', 'red'));
-    console.error(colored('+---------------------------------------------------------+', 'red'));
+    console.error(
+      errorBox('OAuth Timeout\n\n' + 'Authentication did not complete within 2 minutes.', 'ERROR')
+    );
     console.error('');
-    console.error('Authentication did not complete within 2 minutes.');
-    console.error('');
-    console.error(colored('Troubleshooting:', 'yellow'));
+
+    console.error(header('TROUBLESHOOTING'));
     console.error('  1. Check if browser opened (popup blocker?)');
     console.error('  2. Complete login in browser, then return here');
     console.error('  3. Try different browser');
     console.error('  4. Disable browser extensions temporarily');
     console.error('');
-    console.error(colored('For headless/SSH environments:', 'cyan'));
-    console.error(`  ccs ${provider} --auth --headless`);
+
+    console.error(header('FOR HEADLESS/SSH ENVIRONMENTS'));
+    console.error(`  ${color(`ccs ${provider} --auth --headless`, 'command')}`);
     console.error('');
-    console.error('This displays manual authentication steps.');
+    console.error(dim('This displays manual authentication steps.'));
     console.error('');
   }
 
   /**
    * Show CLIProxy port conflict error
    */
-  static showPortConflict(port: number): void {
+  static async showPortConflict(port: number): Promise<void> {
+    await initUI();
+
     console.error('');
-    console.error(colored('+---------------------------------------------------------+', 'red'));
-    console.error(colored('|                   Port Conflict                         |', 'red'));
-    console.error(colored('+---------------------------------------------------------+', 'red'));
+    console.error(
+      errorBox('Port Conflict\n\n' + `CLIProxy port ${port} is already in use.`, 'ERROR')
+    );
     console.error('');
-    console.error(`CLIProxy port ${port} is already in use.`);
+
+    console.error(header('SOLUTIONS'));
     console.error('');
-    console.error(colored('Solutions:', 'yellow'));
     console.error('  1. Find process using port:');
-    console.error(`     lsof -i :${port}           (macOS/Linux)`);
-    console.error(`     netstat -ano | findstr ${port}  (Windows)`);
+    console.error(`     ${color(`lsof -i :${port}`, 'command')}           (macOS/Linux)`);
+    console.error(`     ${color(`netstat -ano | findstr ${port}`, 'command')}  (Windows)`);
     console.error('');
     console.error('  2. Kill the process:');
-    console.error(`     lsof -ti:${port} | xargs kill -9`);
+    console.error(`     ${color(`lsof -ti:${port} | xargs kill -9`, 'command')}`);
     console.error('');
     console.error('  3. Wait and retry (process may exit on its own)');
     console.error('');
@@ -208,38 +237,43 @@ export class ErrorManager {
   /**
    * Show CLIProxy binary download failure error
    */
-  static showBinaryDownloadFailed(url: string, error: string): void {
+  static async showBinaryDownloadFailed(url: string, error: string): Promise<void> {
+    await initUI();
+
     console.error('');
-    console.error(colored('+---------------------------------------------------------+', 'red'));
-    console.error(colored('|                Binary Download Failed                   |', 'red'));
-    console.error(colored('+---------------------------------------------------------+', 'red'));
+    console.error(errorBox('Binary Download Failed\n\n' + `Error: ${error}`, 'ERROR'));
     console.error('');
-    console.error(`Error: ${error}`);
-    console.error('');
-    console.error(colored('Troubleshooting:', 'yellow'));
+
+    console.error(header('TROUBLESHOOTING'));
     console.error('  1. Check internet connection');
     console.error('  2. Check firewall/proxy settings');
     console.error('  3. Try again in a few minutes');
     console.error('');
-    console.error(colored('Manual download:', 'cyan'));
-    console.error(`  URL: ${url}`);
-    console.error('  Save to: ~/.ccs/bin/cliproxyapi');
-    console.error('  chmod +x ~/.ccs/bin/cliproxyapi');
+
+    console.error(header('MANUAL DOWNLOAD'));
+    console.error(`  URL: ${color(url, 'path')}`);
+    console.error(`  Save to: ${color('~/.ccs/bin/cliproxyapi', 'path')}`);
+    console.error(`  ${color('chmod +x ~/.ccs/bin/cliproxyapi', 'command')}`);
     console.error('');
   }
 
   /**
    * Show CLIProxy authentication required error
    */
-  static showAuthRequired(provider: string): void {
+  static async showAuthRequired(provider: string): Promise<void> {
+    await initUI();
+
+    const displayName = provider.charAt(0).toUpperCase() + provider.slice(1);
+
     console.error('');
-    console.error(colored(`[X] ${provider} authentication required`, 'red'));
+    console.error(errorBox(`${displayName} authentication required`, 'ERROR'));
     console.error('');
-    console.error(colored('To authenticate:', 'yellow'));
-    console.error(`  ccs ${provider} --auth`);
+
+    console.error(header('TO AUTHENTICATE'));
+    console.error(`  ${color(`ccs ${provider} --auth`, 'command')}`);
     console.error('');
-    console.error('This will open a browser for OAuth login.');
-    console.error('After login, you can use the profile normally.');
+    console.error(dim('This will open a browser for OAuth login.'));
+    console.error(dim('After login, you can use the profile normally.'));
     console.error('');
   }
 }

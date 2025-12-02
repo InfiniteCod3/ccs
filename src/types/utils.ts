@@ -41,3 +41,64 @@ export interface TerminalInfo {
  * Helper result types
  */
 export type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };
+
+// =============================================================================
+// UI TYPES (Phase 1: CLI UI/UX Enhancement)
+// =============================================================================
+
+/**
+ * Semantic color names for UI elements
+ */
+export type SemanticColor =
+  | 'success' // green - [OK] messages
+  | 'error' // red - [X] messages
+  | 'warning' // yellow - [!] messages
+  | 'info' // cyan - [i] messages
+  | 'dim' // gray - secondary text
+  | 'primary' // #00ECFA - headers, emphasis
+  | 'secondary' // #0099FF - links, accents
+  | 'command' // yellow italic - command examples
+  | 'path'; // cyan underline - file paths
+
+/**
+ * Box style options for boxen wrapper
+ */
+export interface BoxOptions {
+  title?: string;
+  titleAlignment?: 'left' | 'center' | 'right';
+  padding?: number;
+  margin?: number;
+  borderColor?: string;
+  borderStyle?: 'single' | 'double' | 'round' | 'bold' | 'classic';
+}
+
+/**
+ * Table style options for cli-table3 wrapper
+ */
+export interface TableOptions {
+  head?: string[];
+  colWidths?: number[];
+  wordWrap?: boolean;
+  style?: 'unicode' | 'ascii';
+}
+
+/**
+ * Spinner options for ora wrapper
+ */
+export interface SpinnerOptions {
+  text: string;
+  color?: string;
+  prefixText?: string;
+}
+
+/**
+ * Spinner control interface
+ */
+export interface SpinnerController {
+  succeed: (msg?: string) => void;
+  fail: (msg?: string) => void;
+  warn: (msg?: string) => void;
+  info: (msg?: string) => void;
+  update: (text: string) => void;
+  stop: () => void;
+}

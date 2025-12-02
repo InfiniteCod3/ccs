@@ -2,8 +2,20 @@ import * as path from 'path';
 import * as os from 'os';
 import { ColorName, TerminalInfo } from '../types';
 
+// =============================================================================
+// DEPRECATION NOTICE
+// =============================================================================
+// The color functions in this file are deprecated in favor of the new UI layer.
+// Please use `import { ui } from './ui'` instead for:
+// - ui.color(text, semantic) - semantic colors
+// - ui.ok(), ui.fail(), ui.warn(), ui.info() - status indicators
+// - ui.box(), ui.table() - containers
+// - ui.header(), ui.subheader() - section headers
+// =============================================================================
+
 /**
  * TTY-aware color detection (matches lib/ccs bash logic)
+ * @deprecated Use `import { ui } from './ui'` instead
  */
 function getColors(): Record<ColorName, string> {
   const forcedColors = process.env.FORCE_COLOR;
@@ -33,6 +45,7 @@ export const colors = getColors();
 
 /**
  * Helper: Apply color to text (returns plain text if colors disabled)
+ * @deprecated Use `import { ui } from './ui'` and `ui.color()` instead
  */
 export function colored(text: string, colorName: ColorName = 'reset'): string {
   const currentColors = getColors();

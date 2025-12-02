@@ -13,7 +13,19 @@ import * as fs from 'fs';
 import * as path from 'path';
 import ProfileRegistry from './profile-registry';
 import { InstanceManager } from '../management/instance-manager';
-import { colored } from '../utils/helpers';
+import {
+  initUI,
+  header,
+  subheader,
+  color,
+  dim,
+  ok,
+  fail,
+  warn,
+  info,
+  table,
+  infoBox,
+} from '../utils/ui';
 import { detectClaudeCli } from '../utils/claude-detector';
 import { InteractivePrompt } from '../utils/prompt';
 import packageJson from '../../package.json';
@@ -57,56 +69,54 @@ class AuthCommands {
   /**
    * Show help for auth commands
    */
-  showHelp(): void {
-    console.log(colored('CCS Concurrent Account Management', 'bold'));
+  async showHelp(): Promise<void> {
+    await initUI();
+
+    console.log(header('CCS Concurrent Account Management'));
     console.log('');
-    console.log(colored('Usage:', 'cyan'));
-    console.log(`  ${colored('ccs auth', 'yellow')} <command> [options]`);
+    console.log(subheader('Usage'));
+    console.log(`  ${color('ccs auth', 'command')} <command> [options]`);
     console.log('');
-    console.log(colored('Commands:', 'cyan'));
-    console.log(`  ${colored('create <profile>', 'yellow')}        Create new profile and login`);
-    console.log(`  ${colored('list', 'yellow')}                   List all saved profiles`);
-    console.log(`  ${colored('show <profile>', 'yellow')}         Show profile details`);
-    console.log(`  ${colored('remove <profile>', 'yellow')}       Remove saved profile`);
-    console.log(`  ${colored('default <profile>', 'yellow')}      Set default profile`);
+    console.log(subheader('Commands'));
+    console.log(`  ${color('create <profile>', 'command')}        Create new profile and login`);
+    console.log(`  ${color('list', 'command')}                   List all saved profiles`);
+    console.log(`  ${color('show <profile>', 'command')}         Show profile details`);
+    console.log(`  ${color('remove <profile>', 'command')}       Remove saved profile`);
+    console.log(`  ${color('default <profile>', 'command')}      Set default profile`);
     console.log('');
-    console.log(colored('Examples:', 'cyan'));
-    console.log(
-      `  ${colored('ccs auth create work', 'yellow')}                     # Create & login to work profile`
-    );
-    console.log(
-      `  ${colored('ccs auth default work', 'yellow')}                    # Set work as default`
-    );
-    console.log(
-      `  ${colored('ccs auth list', 'yellow')}                            # List all profiles`
-    );
-    console.log(
-      `  ${colored('ccs work "review code"', 'yellow')}                   # Use work profile`
-    );
-    console.log(
-      `  ${colored('ccs "review code"', 'yellow')}                        # Use default profile`
-    );
+    console.log(subheader('Examples'));
+    console.log(`  ${dim('# Create & login to work profile')}`);
+    console.log(`  ${color('ccs auth create work', 'command')}`);
     console.log('');
-    console.log(colored('Options:', 'cyan'));
+    console.log(`  ${dim('# Set work as default')}`);
+    console.log(`  ${color('ccs auth default work', 'command')}`);
+    console.log('');
+    console.log(`  ${dim('# List all profiles')}`);
+    console.log(`  ${color('ccs auth list', 'command')}`);
+    console.log('');
+    console.log(`  ${dim('# Use work profile')}`);
+    console.log(`  ${color('ccs work "review code"', 'command')}`);
+    console.log('');
+    console.log(subheader('Options'));
     console.log(
-      `  ${colored('--force', 'yellow')}                   Allow overwriting existing profile (create)`
+      `  ${color('--force', 'command')}                   Allow overwriting existing profile (create)`
     );
     console.log(
-      `  ${colored('--yes, -y', 'yellow')}                 Skip confirmation prompts (remove)`
+      `  ${color('--yes, -y', 'command')}                 Skip confirmation prompts (remove)`
     );
     console.log(
-      `  ${colored('--json', 'yellow')}                    Output in JSON format (list, show)`
+      `  ${color('--json', 'command')}                    Output in JSON format (list, show)`
     );
     console.log(
-      `  ${colored('--verbose', 'yellow')}                 Show additional details (list)`
+      `  ${color('--verbose', 'command')}                 Show additional details (list)`
     );
     console.log('');
-    console.log(colored('Note:', 'cyan'));
+    console.log(subheader('Note'));
     console.log(
-      `  By default, ${colored('ccs', 'yellow')} uses Claude CLI defaults from ~/.claude/`
+      `  By default, ${color('ccs', 'command')} uses Claude CLI defaults from ~/.claude/`
     );
     console.log(
-      `  Use ${colored('ccs auth default <profile>', 'yellow')} to change the default profile.`
+      `  Use ${color('ccs auth default <profile>', 'command')} to change the default profile.`
     );
     console.log('');
   }
@@ -129,28 +139,29 @@ class AuthCommands {
    * Create new profile and prompt for login
    */
   async handleCreate(args: string[]): Promise<void> {
+    await initUI();
     const { profileName, force } = this.parseArgs(args);
 
     if (!profileName) {
-      console.error('[X] Profile name is required');
+      console.log(fail('Profile name is required'));
       console.log('');
-      console.log(`Usage: ${colored('ccs auth create <profile> [--force]', 'yellow')}`);
+      console.log(`Usage: ${color('ccs auth create <profile> [--force]', 'command')}`);
       console.log('');
       console.log('Example:');
-      console.log(`  ${colored('ccs auth create work', 'yellow')}`);
+      console.log(`  ${color('ccs auth create work', 'command')}`);
       process.exit(1);
     }
 
     // Check if profile already exists
     if (!force && this.registry.hasProfile(profileName)) {
-      console.error(`[X] Profile already exists: ${profileName}`);
-      console.log(`    Use ${colored('--force', 'yellow')} to overwrite`);
+      console.log(fail(`Profile already exists: ${profileName}`));
+      console.log(`    Use ${color('--force', 'command')} to overwrite`);
       process.exit(1);
     }
 
     try {
       // Create instance directory
-      console.log(`[i] Creating profile: ${profileName}`);
+      console.log(info(`Creating profile: ${profileName}`));
       const instancePath = this.instanceMgr.ensureInstance(profileName);
 
       // Create/update profile entry
@@ -164,19 +175,19 @@ class AuthCommands {
         });
       }
 
-      console.log(`[i] Instance directory: ${instancePath}`);
+      console.log(info(`Instance directory: ${instancePath}`));
       console.log('');
-      console.log(colored('[i] Starting Claude in isolated instance...', 'yellow'));
-      console.log(colored('[i] You will be prompted to login with your account.', 'yellow'));
+      console.log(warn('Starting Claude in isolated instance...'));
+      console.log(warn('You will be prompted to login with your account.'));
       console.log('');
 
       // Detect Claude CLI
       const claudeCli = detectClaudeCli();
       if (!claudeCli) {
-        console.error('[X] Claude CLI not found');
+        console.log(fail('Claude CLI not found'));
         console.log('');
         console.log('Please install Claude CLI first:');
-        console.log('  https://claude.ai/download');
+        console.log(`  ${color('https://claude.ai/download', 'path')}`);
         process.exit(1);
       }
 
@@ -189,45 +200,63 @@ class AuthCommands {
       child.on('exit', (code: number | null) => {
         if (code === 0) {
           console.log('');
-          console.log(colored('[OK] Profile created successfully', 'green'));
-          console.log('');
-          console.log(`  Profile: ${profileName}`);
-          console.log(`  Instance: ${instancePath}`);
-          console.log('');
-          console.log('Usage:');
           console.log(
-            `  ${colored(`ccs ${profileName} "your prompt here"`, 'yellow')}        # Use this specific profile`
+            infoBox(
+              `Profile:  ${profileName}\n` + `Instance: ${instancePath}\n` + `Type:     account`,
+              'Profile Created'
+            )
           );
           console.log('');
+          console.log(header('Usage'));
+          console.log(`  ${color(`ccs ${profileName} "your prompt here"`, 'command')}`);
+          console.log('');
           console.log('To set as default (so you can use just "ccs"):');
-          console.log(`  ${colored(`ccs auth default ${profileName}`, 'yellow')}`);
+          console.log(`  ${color(`ccs auth default ${profileName}`, 'command')}`);
           console.log('');
           process.exit(0);
         } else {
           console.log('');
-          console.error('[X] Login failed or cancelled');
+          console.log(fail('Login failed or cancelled'));
           console.log('');
           console.log('To retry:');
-          console.log(`  ${colored(`ccs auth create ${profileName} --force`, 'yellow')}`);
+          console.log(`  ${color(`ccs auth create ${profileName} --force`, 'command')}`);
           console.log('');
           process.exit(1);
         }
       });
 
       child.on('error', (err: Error) => {
-        console.error(`[X] Failed to execute Claude CLI: ${err.message}`);
+        console.log(fail(`Failed to execute Claude CLI: ${err.message}`));
         process.exit(1);
       });
     } catch (error) {
-      console.error(`[X] Failed to create profile: ${(error as Error).message}`);
+      console.log(fail(`Failed to create profile: ${(error as Error).message}`));
       process.exit(1);
     }
+  }
+
+  /**
+   * Format relative time (e.g., "2h ago", "1d ago")
+   */
+  private formatRelativeTime(date: Date): string {
+    const now = Date.now();
+    const diff = now - date.getTime();
+
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return 'just now';
   }
 
   /**
    * List all saved profiles
    */
   async handleList(args: string[]): Promise<void> {
+    await initUI();
     const { verbose, json } = this.parseArgs(args);
 
     try {
@@ -260,20 +289,18 @@ class AuthCommands {
 
       // Human-readable output
       if (profileNames.length === 0) {
-        console.log(colored('No account profiles found', 'yellow'));
+        console.log(warn('No account profiles found'));
         console.log('');
         console.log('To create your first profile:');
-        console.log(
-          `  ${colored('ccs auth create <profile>', 'yellow')}  # Create and login to profile`
-        );
+        console.log(`  ${color('ccs auth create <profile>', 'command')}`);
         console.log('');
         console.log('Example:');
-        console.log(`  ${colored('ccs auth create work', 'yellow')}`);
+        console.log(`  ${color('ccs auth create work', 'command')}`);
         console.log('');
         return;
       }
 
-      console.log(colored('Saved Account Profiles:', 'bold'));
+      console.log(header('Saved Account Profiles'));
       console.log('');
 
       // Sort by last_used (descending), then alphabetically
@@ -296,31 +323,50 @@ class AuthCommands {
         return a.localeCompare(b);
       });
 
-      sorted.forEach((name) => {
+      // Build table rows
+      const rows: string[][] = sorted.map((name) => {
         const profile = profiles[name];
         const isDefault = name === defaultProfile;
-        const indicator = isDefault ? colored('[*]', 'green') : '[ ]';
 
-        console.log(
-          `${indicator} ${colored(name, 'cyan')}${isDefault ? colored(' (default)', 'green') : ''}`
-        );
+        // Status column
+        const status = isDefault ? color('[OK] default', 'success') : color('[OK]', 'success');
 
-        console.log(`    Type: ${profile.type || 'account'}`);
-
-        if (verbose) {
-          console.log(`    Created: ${new Date(profile.created).toLocaleString()}`);
-          if (profile.last_used) {
-            console.log(`    Last used: ${new Date(profile.last_used).toLocaleString()}`);
-          }
+        // Last used column
+        let lastUsed = '-';
+        if (profile.last_used) {
+          lastUsed = this.formatRelativeTime(new Date(profile.last_used));
         }
 
-        console.log('');
+        const row = [
+          color(name, isDefault ? 'primary' : 'info'),
+          profile.type || 'account',
+          status,
+        ];
+
+        if (verbose) {
+          row.push(lastUsed);
+        }
+
+        return row;
       });
 
-      console.log(`Total profiles: ${profileNames.length}`);
+      // Headers
+      const headers = verbose
+        ? ['Profile', 'Type', 'Status', 'Last Used']
+        : ['Profile', 'Type', 'Status'];
+
+      // Print table
+      console.log(
+        table(rows, {
+          head: headers,
+          colWidths: verbose ? [15, 12, 15, 12] : [15, 12, 15],
+        })
+      );
+      console.log('');
+      console.log(dim(`Total: ${profileNames.length} profile(s)`));
       console.log('');
     } catch (error) {
-      console.error(`[X] Failed to list profiles: ${(error as Error).message}`);
+      console.log(fail(`Failed to list profiles: ${(error as Error).message}`));
       process.exit(1);
     }
   }
@@ -329,12 +375,13 @@ class AuthCommands {
    * Show details for a specific profile
    */
   async handleShow(args: string[]): Promise<void> {
+    await initUI();
     const { profileName, json } = this.parseArgs(args);
 
     if (!profileName) {
-      console.error('[X] Profile name is required');
+      console.log(fail('Profile name is required'));
       console.log('');
-      console.log(`Usage: ${colored('ccs auth show <profile> [--json]', 'yellow')}`);
+      console.log(`Usage: ${color('ccs auth show <profile> [--json]', 'command')}`);
       process.exit(1);
     }
 
@@ -372,22 +419,27 @@ class AuthCommands {
       }
 
       // Human-readable output
-      console.log(colored(`Profile: ${profileName}`, 'bold'));
+      const defaultBadge = isDefault ? color(' (default)', 'success') : '';
+      console.log(header(`Profile: ${profileName}${defaultBadge}`));
       console.log('');
-      console.log(`  Type: ${profile.type || 'account'}`);
-      console.log(`  Default: ${isDefault ? 'Yes' : 'No'}`);
-      console.log(`  Instance: ${instancePath}`);
-      console.log(`  Created: ${new Date(profile.created).toLocaleString()}`);
 
-      if (profile.last_used) {
-        console.log(`  Last used: ${new Date(profile.last_used).toLocaleString()}`);
-      } else {
-        console.log(`  Last used: Never`);
-      }
+      // Details table
+      const details = [
+        ['Type', profile.type || 'account'],
+        ['Instance', instancePath],
+        ['Created', new Date(profile.created).toLocaleString()],
+        ['Last Used', profile.last_used ? new Date(profile.last_used).toLocaleString() : 'Never'],
+        ['Sessions', `${sessionCount}`],
+      ];
 
+      console.log(
+        table(details, {
+          colWidths: [15, 45],
+        })
+      );
       console.log('');
     } catch (error) {
-      console.error(`[X] ${(error as Error).message}`);
+      console.log(fail((error as Error).message));
       process.exit(1);
     }
   }
@@ -396,17 +448,18 @@ class AuthCommands {
    * Remove a saved profile
    */
   async handleRemove(args: string[]): Promise<void> {
+    await initUI();
     const { profileName, yes } = this.parseArgs(args);
 
     if (!profileName) {
-      console.error('[X] Profile name is required');
+      console.log(fail('Profile name is required'));
       console.log('');
-      console.log(`Usage: ${colored('ccs auth remove <profile> [--yes]', 'yellow')}`);
+      console.log(`Usage: ${color('ccs auth remove <profile> [--yes]', 'command')}`);
       process.exit(1);
     }
 
     if (!this.registry.hasProfile(profileName)) {
-      console.error(`[X] Profile not found: ${profileName}`);
+      console.log(fail(`Profile not found: ${profileName}`));
       process.exit(1);
     }
 
@@ -427,7 +480,7 @@ class AuthCommands {
 
       // Display impact
       console.log('');
-      console.log(`Profile '${colored(profileName, 'cyan')}' will be permanently deleted.`);
+      console.log(`Profile '${color(profileName, 'command')}' will be permanently deleted.`);
       console.log(`  Instance path: ${instancePath}`);
       console.log(`  Sessions: ${sessionCount} conversation${sessionCount !== 1 ? 's' : ''}`);
       console.log('');
@@ -441,7 +494,7 @@ class AuthCommands {
         ));
 
       if (!confirmed) {
-        console.log('[i] Cancelled');
+        console.log(info('Cancelled'));
         process.exit(0);
       }
 
@@ -451,11 +504,10 @@ class AuthCommands {
       // Delete profile
       this.registry.deleteProfile(profileName);
 
-      console.log(colored('[OK] Profile removed successfully', 'green'));
-      console.log(`    Profile: ${profileName}`);
+      console.log(ok(`Profile removed: ${profileName}`));
       console.log('');
     } catch (error) {
-      console.error(`[X] Failed to remove profile: ${(error as Error).message}`);
+      console.log(fail(`Failed to remove profile: ${(error as Error).message}`));
       process.exit(1);
     }
   }
@@ -464,26 +516,28 @@ class AuthCommands {
    * Set default profile
    */
   async handleDefault(args: string[]): Promise<void> {
+    await initUI();
     const { profileName } = this.parseArgs(args);
 
     if (!profileName) {
-      console.error('[X] Profile name is required');
+      console.log(fail('Profile name is required'));
       console.log('');
-      console.log(`Usage: ${colored('ccs auth default <profile>', 'yellow')}`);
+      console.log(`Usage: ${color('ccs auth default <profile>', 'command')}`);
       process.exit(1);
     }
 
     try {
       this.registry.setDefaultProfile(profileName);
 
-      console.log(colored('[OK] Default profile set', 'green'));
-      console.log(`    Profile: ${profileName}`);
+      console.log(ok(`Default profile set: ${profileName}`));
       console.log('');
       console.log('Now you can use:');
-      console.log(`  ${colored('ccs "your prompt"', 'yellow')}  # Uses ${profileName} profile`);
+      console.log(
+        `  ${color('ccs "your prompt"', 'command')}  ${dim(`# Uses ${profileName} profile`)}`
+      );
       console.log('');
     } catch (error) {
-      console.error(`[X] ${(error as Error).message}`);
+      console.log(fail((error as Error).message));
       process.exit(1);
     }
   }
@@ -493,7 +547,7 @@ class AuthCommands {
    */
   async route(args: string[]): Promise<void> {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h' || args[0] === 'help') {
-      this.showHelp();
+      await this.showHelp();
       return;
     }
 
@@ -507,8 +561,9 @@ class AuthCommands {
 
       case 'save':
         // Deprecated - redirect to create
-        console.log(colored('[!] Command "save" is deprecated', 'yellow'));
-        console.log(`    Use: ${colored('ccs auth create <profile>', 'yellow')} instead`);
+        await initUI();
+        console.log(warn('Command "save" is deprecated'));
+        console.log(`    Use: ${color('ccs auth create <profile>', 'command')} instead`);
         console.log('');
         await this.handleCreate(commandArgs);
         break;
@@ -530,26 +585,29 @@ class AuthCommands {
         break;
 
       case 'current':
-        console.log(colored('[!] Command "current" has been removed', 'yellow'));
+        await initUI();
+        console.log(warn('Command "current" has been removed'));
         console.log('');
         console.log('Each profile has its own login in an isolated instance.');
-        console.log('Use "ccs auth list" to see all profiles.');
+        console.log(`Use ${color('ccs auth list', 'command')} to see all profiles.`);
         console.log('');
         break;
 
       case 'cleanup':
-        console.log(colored('[!] Command "cleanup" has been removed', 'yellow'));
+        await initUI();
+        console.log(warn('Command "cleanup" has been removed'));
         console.log('');
         console.log('No cleanup needed - no separate vault files.');
-        console.log('Use "ccs auth list" to see all profiles.');
+        console.log(`Use ${color('ccs auth list', 'command')} to see all profiles.`);
         console.log('');
         break;
 
       default:
-        console.error(`[X] Unknown command: ${command}`);
+        await initUI();
+        console.log(fail(`Unknown command: ${command}`));
         console.log('');
         console.log('Run for help:');
-        console.log(`  ${colored('ccs auth --help', 'yellow')}`);
+        console.log(`  ${color('ccs auth --help', 'command')}`);
         process.exit(1);
     }
   }

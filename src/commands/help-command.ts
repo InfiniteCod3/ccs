@@ -1,142 +1,239 @@
-import { colored } from '../utils/helpers';
+import { initUI, box, color, dim, sectionHeader, subheader } from '../utils/ui';
+
+// Version is read from VERSION file during build
+const VERSION = '5.3.0';
+
+/**
+ * Print a major section with ═══ borders (only for 3 main sections)
+ * Format:
+ *   ═══ TITLE ═══
+ *   Subtitle line 1
+ *   Subtitle line 2
+ *
+ *   command    Description
+ */
+function printMajorSection(title: string, subtitles: string[], items: [string, string][]): void {
+  // Section header with ═══ borders
+  console.log(sectionHeader(title));
+
+  // Subtitles on separate lines (dim)
+  for (const subtitle of subtitles) {
+    console.log(`  ${dim(subtitle)}`);
+  }
+
+  // Empty line before items
+  console.log('');
+
+  // Calculate max command length for alignment
+  const maxCmdLen = Math.max(...items.map(([cmd]) => cmd.length));
+
+  for (const [cmd, desc] of items) {
+    const paddedCmd = cmd.padEnd(maxCmdLen + 2);
+    console.log(`  ${color(paddedCmd, 'command')} ${desc}`);
+  }
+
+  // Extra spacing after section
+  console.log('');
+}
+
+/**
+ * Print a sub-section with colored title
+ * Format:
+ *   Title (context):
+ *     command    Description
+ */
+function printSubSection(title: string, items: [string, string][]): void {
+  // Sub-section header (colored, no borders)
+  console.log(subheader(`${title}:`));
+
+  // Calculate max command length for alignment
+  const maxCmdLen = Math.max(...items.map(([cmd]) => cmd.length));
+
+  for (const [cmd, desc] of items) {
+    const paddedCmd = cmd.padEnd(maxCmdLen + 2);
+    console.log(`  ${color(paddedCmd, 'command')} ${desc}`);
+  }
+
+  // Spacing after section
+  console.log('');
+}
+
+/**
+ * Print a config/paths section
+ * Format:
+ *   Title:
+ *     Label:    path
+ */
+function printConfigSection(title: string, items: [string, string][]): void {
+  console.log(subheader(`${title}:`));
+
+  // Calculate max label length for alignment
+  const maxLabelLen = Math.max(...items.map(([label]) => label.length));
+
+  for (const [label, path] of items) {
+    const paddedLabel = label.padEnd(maxLabelLen);
+    console.log(`  ${paddedLabel} ${color(path, 'path')}`);
+  }
+
+  console.log('');
+}
 
 /**
  * Display comprehensive help information for CCS (Claude Code Switch)
  */
-export function handleHelpCommand(): void {
-  console.log(colored('CCS (Claude Code Switch) - Profile switching for Claude CLI', 'bold'));
+export async function handleHelpCommand(): Promise<void> {
+  // Initialize UI (if not already)
+  await initUI();
+
+  // Hero box with ASCII art logo
+  // Each letter: C=╔═╗/║ /╚═╝, C=╔═╗/║ /╚═╝, S=╔═╗/╚═╗/╚═╝
+  const logo = `
+╔═╗ ╔═╗ ╔═╗
+║   ║   ╚═╗  v${VERSION}
+╚═╝ ╚═╝ ╚═╝
+
+Claude Code Profile & Model Switcher`.trim();
+
+  console.log(
+    box(logo, {
+      padding: 1,
+      borderStyle: 'round',
+      titleAlignment: 'center',
+    })
+  );
   console.log('');
 
-  console.log(colored('Usage:', 'cyan'));
-  console.log(`  ${colored('ccs', 'yellow')} [profile] [claude-args...]`);
-  console.log(`  ${colored('ccs', 'yellow')} [flags]`);
+  // Usage section
+  console.log(subheader('Usage:'));
+  console.log(`  ${color('ccs', 'command')} [profile] [claude-args...]`);
+  console.log(`  ${color('ccs', 'command')} [flags]`);
   console.log('');
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION 1: API KEY MODELS + PROFILE MANAGEMENT
+  // MAJOR SECTION 1: API Key Profiles
   // ═══════════════════════════════════════════════════════════════════════════
-  console.log(colored('═══ API Key Profiles ═══', 'cyanBold'));
-  console.log('  Configure in ~/.ccs/*.settings.json');
-  console.log('');
-  console.log(`  ${colored('ccs', 'yellow')}                         Use default Claude account`);
-  console.log(`  ${colored('ccs glm', 'yellow')}                      GLM 4.6 (API key required)`);
-  console.log(`  ${colored('ccs glmt', 'yellow')}                     GLM with thinking mode`);
-  console.log(`  ${colored('ccs kimi', 'yellow')}                     Kimi for Coding (API key)`);
-  console.log(`  ${colored('ccs profile create', 'yellow')}          Create custom API profile`);
-  console.log(`  ${colored('ccs profile remove', 'yellow')}          Remove a profile`);
-  console.log(`  ${colored('ccs profile list', 'yellow')}            List all profiles`);
-  console.log('');
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION 2: ACCOUNT MANAGEMENT
-  // ═══════════════════════════════════════════════════════════════════════════
-  console.log(colored('═══ Account Management ═══', 'cyanBold'));
-  console.log('  Run multiple Claude accounts concurrently');
-  console.log('');
-  console.log(
-    `  ${colored('ccs auth --help', 'yellow')}             Show account management commands`
+  printMajorSection(
+    'API Key Profiles',
+    ['Configure in ~/.ccs/*.settings.json'],
+    [
+      ['ccs', 'Use default Claude account'],
+      ['ccs glm', 'GLM 4.6 (API key required)'],
+      ['ccs glmt', 'GLM with thinking mode'],
+      ['ccs kimi', 'Kimi for Coding (API key)'],
+      ['', ''], // Spacer
+      ['ccs api create', 'Create custom API profile'],
+      ['ccs api remove', 'Remove an API profile'],
+      ['ccs api list', 'List all API profiles'],
+    ]
   );
-  console.log(`  ${colored('ccs auth create <name>', 'yellow')}      Create new account profile`);
-  console.log(`  ${colored('ccs auth list', 'yellow')}               List all account profiles`);
-  console.log('');
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION 3: CLI PROXY (OAUTH PROVIDERS)
+  // MAJOR SECTION 2: Account Management
   // ═══════════════════════════════════════════════════════════════════════════
-  console.log(colored('═══ CLI Proxy (OAuth Providers) ═══', 'cyanBold'));
-  console.log('  Zero-config OAuth authentication via CLIProxyAPI');
-  console.log('  First run: Browser opens for authentication');
-  console.log('  Settings: ~/.ccs/{provider}.settings.json (created after auth)');
-  console.log('');
-  console.log(
-    `  ${colored('ccs gemini', 'yellow')}                   Google Gemini (gemini-2.5-pro)`
+  printMajorSection(
+    'Account Management',
+    ['Run multiple Claude accounts concurrently'],
+    [
+      ['ccs auth --help', 'Show account management commands'],
+      ['ccs auth create <name>', 'Create new account profile'],
+      ['ccs auth list', 'List all account profiles'],
+    ]
   );
-  console.log(
-    `  ${colored('ccs codex', 'yellow')}                    OpenAI Codex (gpt-5.1-codex-max)`
-  );
-  console.log(
-    `  ${colored('ccs agy', 'yellow')}                      Antigravity (gemini-3-pro-preview)`
-  );
-  console.log(`  ${colored('ccs qwen', 'yellow')}                     Qwen Code (qwen3-coder)`);
-  console.log('');
-  console.log(`  ${colored('ccs <provider> --auth', 'yellow')}        Authenticate only`);
-  console.log(`  ${colored('ccs <provider> --logout', 'yellow')}      Clear authentication`);
-  console.log(`  ${colored('ccs <provider> --headless', 'yellow')}    Headless auth (for SSH)`);
-  console.log(`  ${colored('ccs codex "explain code"', 'yellow')}     Use with prompt`);
-  console.log('');
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // DELEGATION
+  // MAJOR SECTION 3: CLI Proxy (OAuth Providers)
   // ═══════════════════════════════════════════════════════════════════════════
-  console.log(colored('Delegation (inside Claude Code CLI):', 'cyan'));
-  console.log(
-    `  ${colored('/ccs "task"', 'yellow')}                Delegate task (auto-selects profile)`
+  printMajorSection(
+    'CLI Proxy (OAuth Providers)',
+    [
+      'Zero-config OAuth authentication via CLIProxyAPI',
+      'First run: Browser opens for authentication',
+      'Settings: ~/.ccs/{provider}.settings.json (created after auth)',
+    ],
+    [
+      ['ccs gemini', 'Google Gemini (gemini-2.5-pro)'],
+      ['ccs codex', 'OpenAI Codex (gpt-5.1-codex-max)'],
+      ['ccs agy', 'Antigravity (gemini-3-pro-preview)'],
+      ['ccs qwen', 'Qwen Code (qwen3-coder)'],
+      ['', ''], // Spacer
+      ['ccs <provider> --auth', 'Authenticate only'],
+      ['ccs <provider> --logout', 'Clear authentication'],
+      ['ccs <provider> --headless', 'Headless auth (for SSH)'],
+      ['ccs codex "explain code"', 'Use with prompt'],
+    ]
   );
-  console.log(
-    `  ${colored('/ccs --glm "task"', 'yellow')}           Force GLM-4.6 for simple tasks`
-  );
-  console.log(`  ${colored('/ccs --kimi "task"', 'yellow')}          Force Kimi for long context`);
-  console.log(
-    `  ${colored('/ccs:continue "follow-up"', 'yellow')}    Continue last delegation session`
-  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SUB-SECTIONS (simpler styling)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Delegation
+  printSubSection('Delegation (inside Claude Code CLI)', [
+    ['/ccs "task"', 'Delegate task (auto-selects profile)'],
+    ['/ccs --glm "task"', 'Force GLM-4.6 for simple tasks'],
+    ['/ccs --kimi "task"', 'Force Kimi for long context'],
+    ['/ccs:continue "follow-up"', 'Continue last delegation session'],
+  ]);
+
+  // Diagnostics
+  printSubSection('Diagnostics', [
+    ['ccs doctor', 'Run health check and diagnostics'],
+    ['ccs sync', 'Sync delegation commands and skills'],
+    ['ccs update', 'Update CCS to latest version'],
+  ]);
+
+  // Flags
+  printSubSection('Flags', [
+    ['-h, --help', 'Show this help message'],
+    ['-v, --version', 'Show version and installation info'],
+    ['-sc, --shell-completion', 'Install shell auto-completion'],
+  ]);
+
+  // Configuration
+  printConfigSection('Configuration', [
+    ['Config File:', '~/.ccs/config.json'],
+    ['Profiles:', '~/.ccs/profiles.json'],
+    ['Instances:', '~/.ccs/instances/'],
+    ['Settings:', '~/.ccs/*.settings.json'],
+  ]);
+
+  // CLI Proxy paths
+  console.log(subheader('CLI Proxy:'));
+  console.log(`  Binary:      ${color('~/.ccs/cliproxy/bin/cli-proxy-api', 'path')}`);
+  console.log(`  Config:      ${color('~/.ccs/cliproxy/config.yaml', 'path')}`);
+  console.log(`  Auth:        ${color('~/.ccs/cliproxy/auth/', 'path')}`);
+  console.log(`  ${dim('Port: 8317 (default)')}`);
   console.log('');
 
-  console.log(colored('Diagnostics:', 'cyan'));
+  // Shared Data
+  console.log(subheader('Shared Data:'));
+  console.log(`  Commands:    ${color('~/.ccs/shared/commands/', 'path')}`);
+  console.log(`  Skills:      ${color('~/.ccs/shared/skills/', 'path')}`);
+  console.log(`  Agents:      ${color('~/.ccs/shared/agents/', 'path')}`);
+  console.log(`  ${dim('Note: Symlinked across all profiles')}`);
+  console.log('');
+
+  // Examples (aligned with consistent spacing)
+  console.log(subheader('Examples:'));
+  console.log(`  $ ${color('ccs', 'command')}                     ${dim('# Use default account')}`);
   console.log(
-    `  ${colored('ccs doctor', 'yellow')}                  Run health check and diagnostics`
+    `  $ ${color('ccs gemini', 'command')}              ${dim('# OAuth (browser opens first time)')}`
   );
-  console.log(
-    `  ${colored('ccs sync', 'yellow')}                    Sync delegation commands and skills`
-  );
-  console.log(`  ${colored('ccs update', 'yellow')}                  Update CCS to latest version`);
+  console.log(`  $ ${color('ccs glm "implement API"', 'command')} ${dim('# API key model')}`);
   console.log('');
 
-  console.log(colored('Flags:', 'cyan'));
-  console.log(`  ${colored('-h, --help', 'yellow')}                  Show this help message`);
-  console.log(
-    `  ${colored('-v, --version', 'yellow')}               Show version and installation info`
-  );
-  console.log(
-    `  ${colored('-sc, --shell-completion', 'yellow')}     Install shell auto-completion`
-  );
+  // Docs link
+  console.log(`  ${dim('Docs: https://github.com/kaitranntt/ccs')}`);
   console.log('');
 
-  console.log(colored('Configuration:', 'cyan'));
-  console.log('  Config File: ~/.ccs/config.json');
-  console.log('  Profiles:    ~/.ccs/profiles.json');
-  console.log('  Instances:   ~/.ccs/instances/');
-  console.log('  Settings:    ~/.ccs/*.settings.json');
+  // Uninstall
+  console.log(subheader('Uninstall:'));
+  console.log(`  ${color('npm uninstall -g @kaitranntt/ccs', 'command')}`);
   console.log('');
 
-  console.log(colored('CLI Proxy:', 'cyan'));
-  console.log('  Binary:      ~/.ccs/cliproxy/bin/cli-proxy-api');
-  console.log('  Config:      ~/.ccs/cliproxy/config.yaml');
-  console.log('  Auth:        ~/.ccs/cliproxy/auth/');
-  console.log('  Port:        8317 (default)');
+  // License
+  console.log(dim('License: MIT'));
   console.log('');
-
-  console.log(colored('Shared Data:', 'cyan'));
-  console.log('  Commands:    ~/.ccs/shared/commands/');
-  console.log('  Skills:      ~/.ccs/shared/skills/');
-  console.log('  Agents:      ~/.ccs/shared/agents/');
-  console.log('  Note: Symlinked across all profiles');
-  console.log('');
-
-  console.log(colored('Examples:', 'cyan'));
-  console.log(`  ${colored('$ ccs', 'yellow')}                        # Use default account`);
-  console.log(
-    `  ${colored('$ ccs gemini', 'yellow')}                  # OAuth (browser opens first time)`
-  );
-  console.log(`  ${colored('$ ccs glm "implement API"', 'yellow')}    # API key model`);
-  console.log('');
-  console.log(`  Docs: ${colored('https://github.com/kaitranntt/ccs', 'cyan')}`);
-  console.log('');
-
-  console.log(colored('Uninstall:', 'yellow'));
-  console.log('  npm uninstall -g @kaitranntt/ccs');
-  console.log('');
-
-  console.log(`${colored('License:', 'cyan')} MIT`);
 
   process.exit(0);
 }

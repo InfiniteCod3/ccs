@@ -52,8 +52,8 @@ export function execClaude(
     else process.exit(code || 0);
   });
 
-  child.on('error', () => {
-    ErrorManager.showClaudeNotFound();
+  child.on('error', async () => {
+    await ErrorManager.showClaudeNotFound();
     process.exit(1);
   });
 }

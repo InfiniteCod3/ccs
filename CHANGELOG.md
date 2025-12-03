@@ -1,3 +1,10 @@
+## [5.4.1-dev.2](https://github.com/kaitranntt/ccs/compare/v5.4.1-dev.1...v5.4.1-dev.2) (2025-12-03)
+
+
+### Bug Fixes
+
+* **sync:** implement copy fallback for windows when symlinks unavailable ([6b3f93a](https://github.com/kaitranntt/ccs/commit/6b3f93a80a0232e8c964d73e51aa0afb0768b00f)), closes [#45](https://github.com/kaitranntt/ccs/issues/45)
+
 ## [5.4.1-dev.1](https://github.com/kaitranntt/ccs/compare/v5.4.0...v5.4.1-dev.1) (2025-12-03)
 
 

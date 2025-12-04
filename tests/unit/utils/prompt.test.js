@@ -152,6 +152,93 @@ describe('InteractivePrompt', () => {
     });
   });
 
+  describe('password - bracketed paste handling', () => {
+    /**
+     * Test helper: Simulates the escape sequence filtering logic from password()
+     * This mirrors the implementation to verify bracketed paste sequences are stripped
+     */
+    function stripBracketedPaste(input) {
+      let result = '';
+      let escapeBuffer = '';
+
+      for (const char of input) {
+        const charCode = char.charCodeAt(0);
+
+        // ESC character (start of escape sequence)
+        if (charCode === 27) {
+          escapeBuffer = '\x1b';
+          continue;
+        }
+
+        // If we're in an escape sequence, buffer chars until we detect the pattern
+        if (escapeBuffer) {
+          escapeBuffer += char;
+
+          // Check for bracketed paste sequences: ESC[200~ (start) or ESC[201~ (end)
+          if (escapeBuffer === '\x1b[200~' || escapeBuffer === '\x1b[201~') {
+            escapeBuffer = '';
+            continue;
+          }
+
+          // If buffer is getting too long without match, it's not a paste sequence
+          if (escapeBuffer.length > 6) {
+            escapeBuffer = '';
+          }
+          continue;
+        }
+
+        // Regular printable character
+        if (charCode >= 32) {
+          result += char;
+        }
+      }
+
+      return result;
+    }
+
+    it('strips ESC[200~ (start paste) sequence', () => {
+      const input = '\x1b[200~sk-ant-api-key\x1b[201~';
+      const result = stripBracketedPaste(input);
+      assert.strictEqual(result, 'sk-ant-api-key');
+    });
+
+    it('handles API key pasted with bracketed paste mode', () => {
+      const pastedKey = '\x1b[200~sk-ant-api03-abcdefghijklmnop\x1b[201~';
+      const result = stripBracketedPaste(pastedKey);
+      assert.strictEqual(result, 'sk-ant-api03-abcdefghijklmnop');
+    });
+
+    it('passes through normal typed input without escape sequences', () => {
+      const typedKey = 'sk-ant-api03-normal-typing';
+      const result = stripBracketedPaste(typedKey);
+      assert.strictEqual(result, 'sk-ant-api03-normal-typing');
+    });
+
+    it('handles only start paste sequence', () => {
+      const input = '\x1b[200~my-api-key';
+      const result = stripBracketedPaste(input);
+      assert.strictEqual(result, 'my-api-key');
+    });
+
+    it('handles only end paste sequence', () => {
+      const input = 'my-api-key\x1b[201~';
+      const result = stripBracketedPaste(input);
+      assert.strictEqual(result, 'my-api-key');
+    });
+
+    it('handles multiple paste sequences', () => {
+      const input = '\x1b[200~first\x1b[201~\x1b[200~second\x1b[201~';
+      const result = stripBracketedPaste(input);
+      assert.strictEqual(result, 'firstsecond');
+    });
+
+    it('handles empty paste', () => {
+      const input = '\x1b[200~\x1b[201~';
+      const result = stripBracketedPaste(input);
+      assert.strictEqual(result, '');
+    });
+  });
+
   describe('confirm', () => {
     it('returns true when CCS_YES=1', async () => {
       process.env.CCS_YES = '1';

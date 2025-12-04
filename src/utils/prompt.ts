@@ -143,6 +143,11 @@ export class InteractivePrompt {
 
   /**
    * Get password/secret input (masked)
+   *
+   * Handles bracketed paste mode escape sequences that terminals send:
+   * - Start paste: ESC[200~
+   * - End paste: ESC[201~
+   * These are stripped automatically so pasted API keys work correctly.
    */
   static async password(message: string, options: PasswordOptions = {}): Promise<string> {
     const { mask = '*' } = options;
@@ -162,6 +167,7 @@ export class InteractivePrompt {
 
     return new Promise((resolve) => {
       let input = '';
+      let escapeBuffer = ''; // Buffer for escape sequence detection
 
       const cleanup = (): void => {
         if (process.stdin.setRawMode) {
@@ -176,6 +182,32 @@ export class InteractivePrompt {
 
         for (const char of str) {
           const charCode = char.charCodeAt(0);
+
+          // ESC character (start of escape sequence)
+          if (charCode === 27) {
+            escapeBuffer = '\x1b';
+            continue;
+          }
+
+          // If we're in an escape sequence, buffer chars until we detect the pattern
+          if (escapeBuffer) {
+            escapeBuffer += char;
+
+            // Check for bracketed paste sequences: ESC[200~ (start) or ESC[201~ (end)
+            if (escapeBuffer === '\x1b[200~' || escapeBuffer === '\x1b[201~') {
+              // Discard bracketed paste markers
+              escapeBuffer = '';
+              continue;
+            }
+
+            // If buffer is getting too long without match, it's not a paste sequence
+            // Flush buffer as regular input (shouldn't happen with API keys)
+            if (escapeBuffer.length > 6) {
+              // Not a recognized sequence - skip it entirely (likely other escape seq)
+              escapeBuffer = '';
+            }
+            continue;
+          }
 
           // Enter key (CR or LF)
           if (charCode === 13 || charCode === 10) {

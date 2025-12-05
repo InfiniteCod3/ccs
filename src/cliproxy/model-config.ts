@@ -125,24 +125,50 @@ export async function configureProviderModel(
     defaultIndex: safeDefaultIdx,
   });
 
-  // Get base env vars to preserve haiku model and base URL
+  // Get base env vars for defaults
   const baseEnv = getClaudeEnvVars(provider);
 
-  // Build settings with selected model
-  // For Claude models via Antigravity: disable thinking toggle (protocol limitation)
+  // Read existing settings to preserve user customizations
+  let existingSettings: Record<string, unknown> = {};
+  let existingEnv: Record<string, string> = {};
+  if (fs.existsSync(settingsPath)) {
+    try {
+      existingSettings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      existingEnv = (existingSettings.env as Record<string, string>) || {};
+    } catch {
+      // Invalid JSON - start fresh
+    }
+  }
+
+  // Build settings with selective merge:
+  // - Preserve ALL user settings (top-level and env vars)
+  // - Only update CCS-controlled fields (model selection + thinking toggle for Claude)
   const isClaude = isClaudeModel(selectedModel);
+
+  // CCS-controlled env vars (always override with our values)
+  const ccsControlledEnv = {
+    ANTHROPIC_BASE_URL: baseEnv.ANTHROPIC_BASE_URL,
+    ANTHROPIC_AUTH_TOKEN: baseEnv.ANTHROPIC_AUTH_TOKEN,
+    ANTHROPIC_MODEL: selectedModel,
+    ANTHROPIC_DEFAULT_OPUS_MODEL: selectedModel,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: selectedModel,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: baseEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL,
+  };
+
+  // Merge: user env vars (preserved) + CCS controlled (override)
+  const mergedEnv = {
+    ...existingEnv,
+    ...ccsControlledEnv,
+  };
+
+  // Build final settings: preserve user top-level settings + update env
   const settings: Record<string, unknown> = {
-    env: {
-      ...baseEnv,
-      ANTHROPIC_MODEL: selectedModel,
-      ANTHROPIC_DEFAULT_OPUS_MODEL: selectedModel,
-      ANTHROPIC_DEFAULT_SONNET_MODEL: selectedModel,
-      // Keep haiku as-is from base config (usually flash model)
-    },
+    ...existingSettings,
+    env: mergedEnv,
   };
 
   // Claude models via Antigravity don't support thinking toggle
-  // Google's protocol conversion layer doesn't properly handle tool schemas
+  // Always set to false for Claude models (CCS-controlled)
   if (isClaude) {
     settings.alwaysThinkingEnabled = false;
   }

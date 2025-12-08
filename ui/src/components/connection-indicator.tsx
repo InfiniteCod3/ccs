@@ -11,7 +11,7 @@ export function ConnectionIndicator() {
   const { status } = useWebSocket();
 
   const statusConfig = {
-    connected: { icon: Wifi, color: 'text-green-500', label: 'Connected' },
+    connected: { icon: Wifi, color: 'text-green-600', label: 'Connected' },
     connecting: { icon: Wifi, color: 'text-yellow-500', label: 'Connecting...' },
     disconnected: { icon: WifiOff, color: 'text-red-500', label: 'Disconnected' },
   };

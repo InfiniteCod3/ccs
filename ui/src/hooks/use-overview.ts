@@ -1,8 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 
 interface Overview {
+  version: string;
   profiles: number;
   cliproxy: number;
+  cliproxyVariants: number;
+  cliproxyProviders: number;
   accounts: number;
   health: {
     status: 'ok' | 'warning' | 'error';

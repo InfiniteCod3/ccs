@@ -15,7 +15,7 @@ interface HealthCheck {
 const statusConfig = {
   ok: {
     icon: CheckCircle,
-    color: 'text-green-500',
+    color: 'text-green-600',
     bg: 'bg-green-50 dark:bg-green-900/20',
     border: 'border-green-200 dark:border-green-800',
   },

@@ -2,6 +2,8 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatCard } from '@/components/stat-card';
+import { HeroSection } from '@/components/hero-section';
+import { QuickCommands } from '@/components/quick-commands';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -14,14 +16,15 @@ import {
   BookOpen,
   FolderOpen,
   AlertTriangle,
+  ArrowRight,
 } from 'lucide-react';
 import { useOverview } from '@/hooks/use-overview';
 import { useSharedSummary } from '@/hooks/use-shared';
 
-const HEALTH_COLORS = {
-  ok: 'text-green-500',
-  warning: 'text-yellow-500',
-  error: 'text-red-500',
+const HEALTH_VARIANTS = {
+  ok: 'success',
+  warning: 'warning',
+  error: 'error',
 } as const;
 
 export function HomePage() {
@@ -32,44 +35,48 @@ export function HomePage() {
   if (isOverviewLoading || isSharedLoading) {
     return (
       <div className="p-6 space-y-6">
-        <div>
-          <Skeleton className="h-9 w-[200px] mb-2" />
-          <Skeleton className="h-5 w-[320px]" />
+        {/* Hero Skeleton */}
+        <div className="rounded-xl border p-6">
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-12 w-12 rounded-lg" />
+            <div>
+              <Skeleton className="h-7 w-[180px] mb-2" />
+              <Skeleton className="h-4 w-[220px]" />
+            </div>
+          </div>
         </div>
+
+        {/* Stats Skeleton */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="space-y-3 p-4 border rounded-lg">
-              <div className="flex items-center justify-between">
-                <Skeleton className="h-8 w-8 rounded-full" />
-                <Skeleton className="h-6 w-12" />
-              </div>
-              <div>
-                <Skeleton className="h-4 w-20 mb-1" />
-                <Skeleton className="h-7 w-16" />
+            <div key={i} className="space-y-3 p-4 border rounded-xl">
+              <div className="flex items-center gap-4">
+                <Skeleton className="h-12 w-12 rounded-lg" />
+                <div className="flex-1">
+                  <Skeleton className="h-4 w-20 mb-2" />
+                  <Skeleton className="h-7 w-12" />
+                </div>
               </div>
             </div>
           ))}
         </div>
-        <div className="border rounded-lg p-6 space-y-4">
-          <Skeleton className="h-6 w-[180px]" />
+
+        {/* Quick Actions Skeleton */}
+        <div className="border rounded-xl p-6 space-y-4">
+          <Skeleton className="h-6 w-[140px]" />
           <div className="flex flex-wrap gap-3">
             <Skeleton className="h-10 w-[140px] rounded-md" />
             <Skeleton className="h-10 w-[120px] rounded-md" />
             <Skeleton className="h-10 w-[150px] rounded-md" />
           </div>
         </div>
-        <div className="border rounded-lg p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <Skeleton className="h-6 w-[140px]" />
-            <Skeleton className="h-8 w-[80px] rounded-md" />
-          </div>
-          <div className="flex gap-6">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Skeleton className="h-4 w-4" />
-                <Skeleton className="h-4 w-8" />
-                <Skeleton className="h-4 w-16" />
-              </div>
+
+        {/* Quick Commands Skeleton */}
+        <div className="border rounded-xl p-6 space-y-4">
+          <Skeleton className="h-6 w-[160px]" />
+          <div className="grid grid-cols-2 gap-2">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-14 rounded-lg" />
             ))}
           </div>
         </div>
@@ -77,13 +84,21 @@ export function HomePage() {
     );
   }
 
+  const healthVariant = overview?.health
+    ? HEALTH_VARIANTS[overview.health.status as keyof typeof HEALTH_VARIANTS]
+    : undefined;
+
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Welcome to CCS Config</h1>
-        <p className="text-muted-foreground">Manage your Claude Code Switch configuration</p>
-      </div>
+      {/* Hero Section */}
+      <HeroSection
+        version={overview?.version}
+        healthStatus={overview?.health?.status}
+        healthPassed={overview?.health?.passed}
+        healthTotal={overview?.health?.total}
+      />
 
+      {/* Configuration Warning */}
       {shared?.symlinkStatus && !shared.symlinkStatus.valid && (
         <Alert variant="warning">
           <AlertTriangle className="h-4 w-4" />
@@ -98,74 +113,87 @@ export function HomePage() {
           title="API Profiles"
           value={overview?.profiles ?? 0}
           icon={Key}
+          variant="accent"
+          subtitle="Settings-based"
           onClick={() => navigate('/api')}
         />
         <StatCard
-          title="CLIProxy Variants"
+          title="CLIProxy"
           value={overview?.cliproxy ?? 0}
           icon={Zap}
+          variant="accent"
+          subtitle={`${overview?.cliproxyProviders ?? 0} auth + ${overview?.cliproxyVariants ?? 0} custom`}
           onClick={() => navigate('/cliproxy')}
         />
         <StatCard
           title="Accounts"
           value={overview?.accounts ?? 0}
           icon={Users}
+          variant="default"
+          subtitle="Isolated instances"
           onClick={() => navigate('/accounts')}
         />
         <StatCard
           title="Health"
           value={overview?.health ? `${overview.health.passed}/${overview.health.total}` : '-'}
           icon={Activity}
-          color={
-            overview?.health
-              ? HEALTH_COLORS[overview.health.status as keyof typeof HEALTH_COLORS]
-              : undefined
-          }
+          variant={healthVariant}
+          subtitle="System checks"
           onClick={() => navigate('/health')}
         />
       </div>
 
       {/* Quick Actions */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle className="text-lg">Quick Actions</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
-          <Button onClick={() => navigate('/api')}>
-            <Plus className="w-4 h-4 mr-2" /> New Profile
+          <Button onClick={() => navigate('/api')} className="gap-2">
+            <Plus className="w-4 h-4" /> New Profile
           </Button>
-          <Button variant="outline" onClick={() => navigate('/health')}>
-            <Stethoscope className="w-4 h-4 mr-2" /> Run Doctor
+          <Button variant="outline" onClick={() => navigate('/health')} className="gap-2">
+            <Stethoscope className="w-4 h-4" /> Run Doctor
           </Button>
-          <Button variant="outline" asChild>
+          <Button variant="outline" asChild className="gap-2">
             <a href="https://github.com/kaitranntt/ccs" target="_blank" rel="noopener noreferrer">
-              <BookOpen className="w-4 h-4 mr-2" /> Documentation
+              <BookOpen className="w-4 h-4" /> Documentation
             </a>
           </Button>
         </CardContent>
       </Card>
 
+      {/* Quick Commands */}
+      <QuickCommands />
+
       {/* Shared Data Summary */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg">Shared Data</CardTitle>
-          <Button variant="ghost" size="sm" onClick={() => navigate('/shared')}>
-            View All
+      <Card className="group hover:border-primary/50 transition-colors">
+        <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <FolderOpen className="w-5 h-5 text-muted-foreground" />
+            Shared Data
+          </CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/shared')}
+            className="gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
+          >
+            View All <ArrowRight className="w-4 h-4" />
           </Button>
         </CardHeader>
         <CardContent>
           <div className="flex gap-6 text-sm">
-            <div className="flex items-center gap-2">
-              <FolderOpen className="w-4 h-4 text-muted-foreground" />
-              <span className="font-medium">{shared?.commands ?? 0}</span>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50">
+              <span className="text-xl font-bold font-mono">{shared?.commands ?? 0}</span>
               <span className="text-muted-foreground">Commands</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="font-medium">{shared?.skills ?? 0}</span>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50">
+              <span className="text-xl font-bold font-mono">{shared?.skills ?? 0}</span>
               <span className="text-muted-foreground">Skills</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="font-medium">{shared?.agents ?? 0}</span>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50">
+              <span className="text-xl font-bold font-mono">{shared?.agents ?? 0}</span>
               <span className="text-muted-foreground">Agents</span>
             </div>
           </div>

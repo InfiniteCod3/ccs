@@ -9,6 +9,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getCcsDir, loadConfig } from '../utils/config-manager';
 import { runHealthChecks } from './health-service';
+import { getAllAuthStatus, initializeAccounts } from '../cliproxy/auth-handler';
+import { getVersion } from '../utils/version';
 
 export const overviewRoutes = Router();
 
@@ -20,14 +22,25 @@ overviewRoutes.get('/', (_req: Request, res: Response) => {
     const config = loadConfig();
 
     const profileCount = Object.keys(config.profiles).length;
-    const cliproxyCount = Object.keys(config.cliproxy || {}).length;
+    const cliproxyVariantCount = Object.keys(config.cliproxy || {}).length;
+
+    // Count authenticated built-in providers (gemini, codex, agy, qwen, iflow)
+    initializeAccounts();
+    const authStatuses = getAllAuthStatus();
+    const authenticatedProviderCount = authStatuses.filter((s) => s.authenticated).length;
+
+    // Total CLIProxy = custom variants + authenticated providers
+    const totalCliproxyCount = cliproxyVariantCount + authenticatedProviderCount;
 
     // Get quick health summary
     const health = runHealthChecks();
 
     res.json({
+      version: getVersion(),
       profiles: profileCount,
-      cliproxy: cliproxyCount,
+      cliproxy: totalCliproxyCount,
+      cliproxyVariants: cliproxyVariantCount,
+      cliproxyProviders: authenticatedProviderCount,
       accounts: getAccountCount(),
       health: {
         status:
@@ -38,8 +51,11 @@ overviewRoutes.get('/', (_req: Request, res: Response) => {
     });
   } catch {
     res.json({
+      version: getVersion(),
       profiles: 0,
       cliproxy: 0,
+      cliproxyVariants: 0,
+      cliproxyProviders: 0,
       accounts: 0,
       health: { status: 'error', passed: 0, total: 0 },
     });

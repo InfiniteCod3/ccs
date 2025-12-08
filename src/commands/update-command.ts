@@ -6,11 +6,10 @@
  */
 
 import { spawn } from 'child_process';
-import * as path from 'path';
-import * as fs from 'fs';
 import { colored } from '../utils/helpers';
 import { detectInstallationMethod, detectPackageManager } from '../utils/package-manager-detector';
 import { compareVersionsWithPrerelease } from '../utils/update-checker';
+import { getVersion } from '../utils/version';
 
 /**
  * Options for the update command
@@ -20,10 +19,8 @@ export interface UpdateOptions {
   beta?: boolean;
 }
 
-// Version (sync with package.json)
-const CCS_VERSION = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8')
-).version;
+// Version (from centralized utility)
+const CCS_VERSION = getVersion();
 
 /**
  * Handle the update command
@@ -169,19 +166,17 @@ function handleCheckFailed(
  * Handle no update available
  */
 function handleNoUpdate(reason: string | undefined): void {
-  const CCS_VERSION_LOCAL = JSON.parse(
-    fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8')
-  ).version;
+  const version = getVersion();
 
-  let message = `You are already on the latest version (${CCS_VERSION_LOCAL})`;
+  let message = `You are already on the latest version (${version})`;
 
   switch (reason) {
     case 'dismissed':
-      message = `Update dismissed. You are on version ${CCS_VERSION_LOCAL}`;
+      message = `Update dismissed. You are on version ${version}`;
       console.log(colored(`[i] ${message}`, 'yellow'));
       break;
     case 'cached':
-      message = `No updates available (cached result). You are on version ${CCS_VERSION_LOCAL}`;
+      message = `No updates available (cached result). You are on version ${version}`;
       console.log(colored(`[i] ${message}`, 'cyan'));
       break;
     default:

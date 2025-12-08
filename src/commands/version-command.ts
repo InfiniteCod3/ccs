@@ -9,17 +9,13 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { colored } from '../utils/helpers';
 import { getConfigPath } from '../utils/config-manager';
-
-// Get version from package.json
-const CCS_VERSION = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8')
-).version;
+import { getVersion } from '../utils/version';
 
 /**
  * Handle version command
  */
 export function handleVersionCommand(): void {
-  console.log(colored(`CCS (Claude Code Switch) v${CCS_VERSION}`, 'bold'));
+  console.log(colored(`CCS (Claude Code Switch) v${getVersion()}`, 'bold'));
   console.log('');
 
   console.log(colored('Installation:', 'cyan'));

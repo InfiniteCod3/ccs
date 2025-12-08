@@ -68,7 +68,8 @@ export function CliproxyPage() {
                     <>
                       Not authenticated
                       <span className="block text-xs mt-1">
-                        Run: <code className="bg-muted px-1 rounded">ccs {status.provider} --auth</code>
+                        Run:{' '}
+                        <code className="bg-muted px-1 rounded">ccs {status.provider} --auth</code>
                       </span>
                     </>
                   )}

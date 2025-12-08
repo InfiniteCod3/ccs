@@ -366,12 +366,14 @@ async function handleList(): Promise<void> {
     for (const status of authStatuses) {
       const oauthConfig = getOAuthConfig(status.provider);
       const icon = status.authenticated ? ok('') : warn('');
-      const authLabel = status.authenticated ? color('authenticated', 'success') : dim('not authenticated');
-      const lastAuthStr = status.lastAuth
-        ? dim(` (${status.lastAuth.toLocaleDateString()})`)
-        : '';
+      const authLabel = status.authenticated
+        ? color('authenticated', 'success')
+        : dim('not authenticated');
+      const lastAuthStr = status.lastAuth ? dim(` (${status.lastAuth.toLocaleDateString()})`) : '';
 
-      console.log(`  ${icon} ${color(status.provider, 'command').padEnd(18)} ${oauthConfig.displayName.padEnd(16)} ${authLabel}${lastAuthStr}`);
+      console.log(
+        `  ${icon} ${color(status.provider, 'command').padEnd(18)} ${oauthConfig.displayName.padEnd(16)} ${authLabel}${lastAuthStr}`
+      );
     }
     console.log('');
     console.log(dim('  To authenticate: ccs <provider> --auth'));

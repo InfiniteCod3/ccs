@@ -162,6 +162,8 @@ Claude Code Profile & Model Switcher`.trim();
       ['', ''], // Spacer
       ['ccs <provider> --auth', 'Authenticate only'],
       ['ccs <provider> --auth --add', 'Add another account'],
+      ['ccs <provider> --accounts', 'List all accounts'],
+      ['ccs <provider> --use <name>', 'Switch to account'],
       ['ccs <provider> --config', 'Change model (agy, gemini)'],
       ['ccs <provider> --logout', 'Clear authentication'],
       ['ccs <provider> --headless', 'Headless auth (for SSH)'],

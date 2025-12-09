@@ -166,6 +166,32 @@ export function getAccount(provider: CLIProxyProvider, accountId: string): Accou
 }
 
 /**
+ * Find account by query (nickname, email, or id)
+ * Supports partial matching for convenience
+ */
+export function findAccountByQuery(provider: CLIProxyProvider, query: string): AccountInfo | null {
+  const accounts = getProviderAccounts(provider);
+  const lowerQuery = query.toLowerCase();
+
+  // Exact match first (id, email, nickname)
+  const exactMatch = accounts.find(
+    (a) =>
+      a.id === query ||
+      a.email?.toLowerCase() === lowerQuery ||
+      a.nickname?.toLowerCase() === lowerQuery
+  );
+  if (exactMatch) return exactMatch;
+
+  // Partial match on nickname or email prefix
+  const partialMatch = accounts.find(
+    (a) =>
+      a.nickname?.toLowerCase().startsWith(lowerQuery) ||
+      a.email?.toLowerCase().startsWith(lowerQuery)
+  );
+  return partialMatch || null;
+}
+
+/**
  * Register a new account
  * Called after successful OAuth to record the account
  */

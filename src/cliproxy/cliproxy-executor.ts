@@ -28,6 +28,12 @@ import { isAuthenticated } from './auth-handler';
 import { CLIProxyProvider, ExecutorConfig } from './types';
 import { configureProviderModel, getCurrentModel } from './model-config';
 import { supportsModelConfig, isModelBroken, getModelIssueUrl, findModel } from './model-catalog';
+import {
+  findAccountByQuery,
+  getProviderAccounts,
+  setDefaultAccount,
+  touchAccount,
+} from './account-manager';
 
 /** Default executor configuration */
 const DEFAULT_CONFIG: ExecutorConfig = {
@@ -124,6 +130,52 @@ export async function execClaudeWithCLIProxy(
   const forceLogout = args.includes('--logout');
   const forceConfig = args.includes('--config');
   const addAccount = args.includes('--add');
+  const showAccounts = args.includes('--accounts');
+
+  // Parse --use <account> flag
+  let useAccount: string | undefined;
+  const useIdx = args.indexOf('--use');
+  if (useIdx !== -1 && args[useIdx + 1] && !args[useIdx + 1].startsWith('-')) {
+    useAccount = args[useIdx + 1];
+  }
+
+  // Handle --accounts: list accounts and exit
+  if (showAccounts) {
+    const accounts = getProviderAccounts(provider);
+    if (accounts.length === 0) {
+      console.log(`[i] No accounts registered for ${providerConfig.displayName}`);
+      console.log(`    Run "ccs ${provider} --auth" to add an account`);
+    } else {
+      console.log(`\n${providerConfig.displayName} Accounts:\n`);
+      for (const acct of accounts) {
+        const defaultMark = acct.isDefault ? ' (default)' : '';
+        const nickname = acct.nickname ? `[${acct.nickname}]` : '';
+        console.log(`  ${nickname.padEnd(12)} ${acct.email || acct.id}${defaultMark}`);
+      }
+      console.log(`\n  Use "ccs ${provider} --use <nickname>" to switch accounts`);
+    }
+    process.exit(0);
+  }
+
+  // Handle --use: switch to specified account
+  if (useAccount) {
+    const account = findAccountByQuery(provider, useAccount);
+    if (!account) {
+      console.error(`[X] Account not found: "${useAccount}"`);
+      const accounts = getProviderAccounts(provider);
+      if (accounts.length > 0) {
+        console.error(`    Available accounts:`);
+        for (const acct of accounts) {
+          console.error(`      - ${acct.nickname || acct.id} (${acct.email || 'no email'})`);
+        }
+      }
+      process.exit(1);
+    }
+    // Set as default for this and future sessions
+    setDefaultAccount(provider, account.id);
+    touchAccount(provider, account.id);
+    console.log(`[OK] Switched to account: ${account.nickname || account.email || account.id}`);
+  }
 
   // Handle --config: configure model selection and exit
   // Pass customSettingsPath for CLIProxy variants to save to correct file
@@ -262,8 +314,14 @@ export async function execClaudeWithCLIProxy(
   log(`Claude env: ANTHROPIC_MODEL=${envVars.ANTHROPIC_MODEL}`);
 
   // Filter out CCS-specific flags before passing to Claude CLI
-  const ccsFlags = ['--auth', '--headless', '--logout', '--config', '--add'];
-  const claudeArgs = args.filter((arg) => !ccsFlags.includes(arg));
+  const ccsFlags = ['--auth', '--headless', '--logout', '--config', '--add', '--accounts', '--use'];
+  const claudeArgs = args.filter((arg, idx) => {
+    // Filter out CCS flags
+    if (ccsFlags.includes(arg)) return false;
+    // Filter out value after --use
+    if (args[idx - 1] === '--use') return false;
+    return true;
+  });
 
   const isWindows = process.platform === 'win32';
   const needsShell = isWindows && /\.(cmd|bat|ps1)$/i.test(claudeCli);

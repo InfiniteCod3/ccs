@@ -656,6 +656,21 @@ async function showHelp(): Promise<void> {
   }
   console.log('');
 
+  // Multi-Account Commands
+  console.log(subheader('Multi-Account Commands:'));
+  const multiAcctCmds: [string, string][] = [
+    ['--auth', 'Authenticate with a provider (first account)'],
+    ['--auth --add', 'Add another account to a provider'],
+    ['--nickname <name>', 'Set friendly name for account'],
+    ['--accounts', 'List all accounts for a provider'],
+    ['--use <name>', 'Switch to account by nickname/email'],
+  ];
+  const maxMultiLen = Math.max(...multiAcctCmds.map(([cmd]) => cmd.length));
+  for (const [cmd, desc] of multiAcctCmds) {
+    console.log(`  ${color(cmd.padEnd(maxMultiLen + 2), 'command')} ${desc}`);
+  }
+  console.log('');
+
   // Create Options
   console.log(subheader('Create Options:'));
   const createOpts: [string, string][] = [
@@ -688,6 +703,23 @@ async function showHelp(): Promise<void> {
   );
   console.log(
     `  $ ${color('ccs cliproxy --latest', 'command')}                   ${dim('# Update binary')}`
+  );
+  console.log('');
+  console.log(subheader('Multi-Account Examples:'));
+  console.log(
+    `  $ ${color('ccs gemini --auth', 'command')}                       ${dim('# First account')}`
+  );
+  console.log(
+    `  $ ${color('ccs gemini --auth --add', 'command')}                 ${dim('# Add second account')}`
+  );
+  console.log(
+    `  $ ${color('ccs gemini --auth --add --nickname work', 'command')} ${dim('# With nickname')}`
+  );
+  console.log(
+    `  $ ${color('ccs agy --accounts', 'command')}                      ${dim('# List accounts')}`
+  );
+  console.log(
+    `  $ ${color('ccs agy --use work', 'command')}                      ${dim('# Switch account')}`
   );
   console.log('');
 

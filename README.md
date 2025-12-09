@@ -106,6 +106,29 @@ ccs agy --headless       # Displays URL, paste in browser elsewhere
 ccs gemini --logout
 ```
 
+### Multi-Account for OAuth Providers
+
+Use multiple accounts per provider (work + personal):
+
+```bash
+# First account (default)
+ccs gemini --auth
+
+# Add another account
+ccs gemini --auth --add
+
+# Add with nickname for easy identification
+ccs gemini --auth --add --nickname work
+
+# List all accounts
+ccs agy --accounts
+
+# Switch to a different account
+ccs agy --use work
+```
+
+Accounts are stored in `~/.ccs/cliproxy/accounts.json` and can be managed via web dashboard (`ccs config`).
+
 ### OAuth vs API Key Models
 
 | Feature | OAuth Providers<br>(gemini, codex, agy) | API Key Models<br>(glm, kimi) |

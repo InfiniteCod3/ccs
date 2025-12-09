@@ -48,8 +48,18 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
   agy: {
     provider: 'agy',
     displayName: 'Antigravity',
-    defaultModel: 'gemini-3-pro-preview',
+    defaultModel: 'gemini-claude-opus-4-5-thinking',
     models: [
+      {
+        id: 'gemini-claude-opus-4-5-thinking',
+        name: 'Claude Opus 4.5 Thinking',
+        description: 'Most capable, extended thinking',
+      },
+      {
+        id: 'gemini-claude-sonnet-4-5-thinking',
+        name: 'Claude Sonnet 4.5 Thinking',
+        description: 'Balanced with extended thinking',
+      },
       {
         id: 'gemini-claude-sonnet-4-5',
         name: 'Claude Sonnet 4.5',
@@ -59,22 +69,6 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
         id: 'gemini-3-pro-preview',
         name: 'Gemini 3 Pro',
         description: 'Google latest model via Antigravity',
-      },
-      {
-        id: 'gemini-claude-opus-4-5-thinking',
-        name: 'Claude Opus 4.5 Thinking',
-        description: 'Most capable, extended thinking',
-        deprecated: true,
-        deprecationReason:
-          'Thinking models are deprecated due to compatibility issues with Antigravity',
-      },
-      {
-        id: 'gemini-claude-sonnet-4-5-thinking',
-        name: 'Claude Sonnet 4.5 Thinking',
-        description: 'Balanced with extended thinking',
-        deprecated: true,
-        deprecationReason:
-          'Thinking models are deprecated due to compatibility issues with Antigravity',
       },
     ],
   },

@@ -33,7 +33,7 @@ describe('Model Catalog', () => {
   describe('AGY models', () => {
     it('has correct default model', () => {
       const { MODEL_CATALOG } = modelCatalog;
-      assert.strictEqual(MODEL_CATALOG.agy.defaultModel, 'gemini-3-pro-preview');
+      assert.strictEqual(MODEL_CATALOG.agy.defaultModel, 'gemini-claude-opus-4-5-thinking');
     });
 
     it('includes Claude Opus 4.5 Thinking', () => {
@@ -215,60 +215,58 @@ describe('Model Catalog', () => {
     });
   });
 
-  describe('Deprecated models', () => {
-    it('Claude Opus 4.5 Thinking is marked as deprecated', () => {
+  describe('Thinking models ordering', () => {
+    it('Claude Opus 4.5 Thinking is not deprecated', () => {
       const { MODEL_CATALOG } = modelCatalog;
       const opus = MODEL_CATALOG.agy.models.find(
         (m) => m.id === 'gemini-claude-opus-4-5-thinking'
       );
       assert(opus, 'Should include Claude Opus 4.5 Thinking');
-      assert.strictEqual(opus.deprecated, true, 'Should be marked as deprecated');
-      assert(opus.deprecationReason, 'Should have deprecation reason');
+      assert.strictEqual(opus.deprecated, undefined, 'Should not be marked as deprecated');
     });
 
-    it('Claude Sonnet 4.5 Thinking is marked as deprecated', () => {
+    it('Claude Sonnet 4.5 Thinking is not deprecated', () => {
       const { MODEL_CATALOG } = modelCatalog;
       const sonnetThinking = MODEL_CATALOG.agy.models.find(
         (m) => m.id === 'gemini-claude-sonnet-4-5-thinking'
       );
       assert(sonnetThinking, 'Should include Claude Sonnet 4.5 Thinking');
-      assert.strictEqual(sonnetThinking.deprecated, true, 'Should be marked as deprecated');
-      assert(sonnetThinking.deprecationReason, 'Should have deprecation reason');
+      assert.strictEqual(sonnetThinking.deprecated, undefined, 'Should not be marked as deprecated');
     });
 
-    it('deprecated models are at the bottom of the list', () => {
+    it('thinking models are at the top of the list', () => {
       const { MODEL_CATALOG } = modelCatalog;
       const models = MODEL_CATALOG.agy.models;
 
-      // Find indices of deprecated models
+      // Find indices of thinking models
       const opusIdx = models.findIndex((m) => m.id === 'gemini-claude-opus-4-5-thinking');
       const sonnetThinkingIdx = models.findIndex(
         (m) => m.id === 'gemini-claude-sonnet-4-5-thinking'
       );
 
-      // Find indices of non-deprecated models
+      // Find indices of non-thinking models
       const sonnetIdx = models.findIndex((m) => m.id === 'gemini-claude-sonnet-4-5');
       const geminiIdx = models.findIndex((m) => m.id === 'gemini-3-pro-preview');
 
-      // Deprecated models should come after non-deprecated models
-      assert(opusIdx > sonnetIdx, 'Opus Thinking should be below non-deprecated Sonnet');
-      assert(opusIdx > geminiIdx, 'Opus Thinking should be below non-deprecated Gemini');
+      // Thinking models should come before non-thinking models
+      assert(opusIdx < sonnetIdx, 'Opus Thinking should be above non-thinking Sonnet');
+      assert(opusIdx < geminiIdx, 'Opus Thinking should be above non-thinking Gemini');
       assert(
-        sonnetThinkingIdx > sonnetIdx,
-        'Sonnet Thinking should be below non-deprecated Sonnet'
+        sonnetThinkingIdx < sonnetIdx,
+        'Sonnet Thinking should be above non-thinking Sonnet'
       );
       assert(
-        sonnetThinkingIdx > geminiIdx,
-        'Sonnet Thinking should be below non-deprecated Gemini'
+        sonnetThinkingIdx < geminiIdx,
+        'Sonnet Thinking should be above non-thinking Gemini'
       );
     });
   });
 
   describe('isModelDeprecated', () => {
-    it('returns true for deprecated models', () => {
+    it('returns false for thinking models (no longer deprecated)', () => {
       const { isModelDeprecated } = modelCatalog;
-      assert.strictEqual(isModelDeprecated('agy', 'gemini-claude-opus-4-5-thinking'), true);
-      assert.strictEqual(isModelDeprecated('agy', 'gemini-claude-sonnet-4-5-thinking'), true);
+      assert.strictEqual(isModelDeprecated('agy', 'gemini-claude-opus-4-5-thinking'), false);
+      assert.strictEqual(isModelDeprecated('agy', 'gemini-claude-sonnet-4-5-thinking'), false);
     });
 
     it('returns false for non-deprecated models', () => {
@@ -284,11 +282,10 @@ describe('Model Catalog', () => {
   });
 
   describe('getModelDeprecationReason', () => {
-    it('returns deprecation reason for deprecated models', () => {
+    it('returns undefined for thinking models (no longer deprecated)', () => {
       const { getModelDeprecationReason } = modelCatalog;
-      const reason = getModelDeprecationReason('agy', 'gemini-claude-opus-4-5-thinking');
-      assert(reason, 'Should have deprecation reason');
-      assert(typeof reason === 'string', 'Reason should be a string');
+      assert.strictEqual(getModelDeprecationReason('agy', 'gemini-claude-opus-4-5-thinking'), undefined);
+      assert.strictEqual(getModelDeprecationReason('agy', 'gemini-claude-sonnet-4-5-thinking'), undefined);
     });
 
     it('returns undefined for non-deprecated models', () => {

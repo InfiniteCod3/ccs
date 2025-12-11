@@ -126,6 +126,7 @@ export function CodeEditor({
           value={value}
           onValueChange={readonly ? () => {} : onChange}
           highlight={highlightCode}
+          key={isDark ? 'dark' : 'light'}
           padding={12}
           disabled={readonly}
           onFocus={() => setIsFocused(true)}

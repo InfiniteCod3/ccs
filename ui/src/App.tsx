@@ -50,7 +50,7 @@ function Layout() {
             <ThemeToggle />
           </div>
         </header>
-        <div className="flex-1 overflow-auto pb-12">
+        <div className="flex-1 overflow-auto min-h-0">
           <Suspense fallback={<PageLoader />}>
             <Outlet />
           </Suspense>

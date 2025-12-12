@@ -12,6 +12,7 @@ jobs:
 
     permissions:
       contents: write
+      issues: write
 
     steps:
       - name: Checkout
@@ -95,6 +96,63 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --tag dev
+
+      - name: Tag resolved issues
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          NEW_VERSION="${{ steps.bump.outputs.new }}"
+
+          # Find commits since last dev release (look for version bump commits)
+          LAST_RELEASE_COMMIT=$(git log --oneline --grep="chore(release):" -n 2 | tail -1 | cut -d' ' -f1)
+
+          if [[ -n "$LAST_RELEASE_COMMIT" ]]; then
+            RANGE="${LAST_RELEASE_COMMIT}..HEAD"
+          else
+            RANGE="HEAD~20..HEAD"
+          fi
+
+          echo "Checking commits in range: $RANGE"
+
+          # Extract issue numbers from commits
+          ISSUES=$(git log $RANGE --pretty=format:"%s %b" | \
+            grep -oE "(Fixes|Closes|Resolves|Refs?) #[0-9]+" | \
+            grep -oE "#[0-9]+" | sort -u || true)
+
+          if [[ -z "$ISSUES" ]]; then
+            echo "No linked issues found in commits"
+            exit 0
+          fi
+
+          # Create labels if they don't exist
+          gh label create "released-dev" \
+            --color "1d76db" \
+            --description "Fix available in @dev npm channel" \
+            --repo ${{ github.repository }} 2>/dev/null || true
+
+          for ISSUE in $ISSUES; do
+            NUM=${ISSUE#\#}
+            echo "Tagging issue #$NUM as released-dev"
+
+            # Add comment
+            gh issue comment $NUM --body ":test_tube: This fix is available for testing in version \`$NEW_VERSION\`
+
+Install with:
+\`\`\`bash
+npm install @kaitranntt/ccs@dev
+\`\`\`
+
+Please test and confirm the fix works as expected." --repo ${{ github.repository }} || true
+
+            # Add released-dev label, remove pending-release if present
+            gh issue edit $NUM \
+              --add-label "released-dev" \
+              --remove-label "pending-release" \
+              --repo ${{ github.repository }} 2>/dev/null || \
+            gh issue edit $NUM \
+              --add-label "released-dev" \
+              --repo ${{ github.repository }} || true
+          done
 
       - name: Commit version bump
         run: |

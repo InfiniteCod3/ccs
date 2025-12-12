@@ -12,7 +12,11 @@ import { Config, Settings } from '../types/config';
 import { expandPath } from '../utils/helpers';
 import { runHealthChecks, fixHealthIssue } from './health-service';
 import { getAllAuthStatus, getOAuthConfig, initializeAccounts } from '../cliproxy/auth-handler';
-import { fetchCliproxyStats, isCliproxyRunning } from '../cliproxy/stats-fetcher';
+import {
+  fetchCliproxyStats,
+  fetchCliproxyModels,
+  isCliproxyRunning,
+} from '../cliproxy/stats-fetcher';
 import {
   listOpenAICompatProviders,
   getOpenAICompatProvider,
@@ -668,6 +672,93 @@ apiRoutes.put('/settings/:profile', (req: Request, res: Response): void => {
   });
 });
 
+// ==================== Presets ====================
+
+/**
+ * GET /api/settings/:profile/presets - Get saved presets for a provider
+ */
+apiRoutes.get('/settings/:profile/presets', (req: Request, res: Response): void => {
+  const { profile } = req.params;
+  const ccsDir = getCcsDir();
+  const settingsPath = path.join(ccsDir, `${profile}.settings.json`);
+
+  if (!fs.existsSync(settingsPath)) {
+    res.json({ presets: [] });
+    return;
+  }
+
+  const settings = loadSettings(settingsPath);
+  res.json({ presets: settings.presets || [] });
+});
+
+/**
+ * POST /api/settings/:profile/presets - Create a new preset
+ */
+apiRoutes.post('/settings/:profile/presets', (req: Request, res: Response): void => {
+  const { profile } = req.params;
+  const { name, default: defaultModel, opus, sonnet, haiku } = req.body;
+
+  if (!name || !defaultModel) {
+    res.status(400).json({ error: 'Missing required fields: name, default' });
+    return;
+  }
+
+  const ccsDir = getCcsDir();
+  const settingsPath = path.join(ccsDir, `${profile}.settings.json`);
+
+  // Create settings file if it doesn't exist
+  if (!fs.existsSync(settingsPath)) {
+    fs.writeFileSync(settingsPath, JSON.stringify({ env: {}, presets: [] }, null, 2) + '\n');
+  }
+
+  const settings = loadSettings(settingsPath);
+  settings.presets = settings.presets || [];
+
+  // Check for duplicate name
+  if (settings.presets.some((p) => p.name === name)) {
+    res.status(409).json({ error: 'Preset with this name already exists' });
+    return;
+  }
+
+  const preset = {
+    name,
+    default: defaultModel,
+    opus: opus || defaultModel,
+    sonnet: sonnet || defaultModel,
+    haiku: haiku || defaultModel,
+  };
+
+  settings.presets.push(preset);
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+
+  res.status(201).json({ preset });
+});
+
+/**
+ * DELETE /api/settings/:profile/presets/:name - Delete a preset
+ */
+apiRoutes.delete('/settings/:profile/presets/:name', (req: Request, res: Response): void => {
+  const { profile, name } = req.params;
+  const ccsDir = getCcsDir();
+  const settingsPath = path.join(ccsDir, `${profile}.settings.json`);
+
+  if (!fs.existsSync(settingsPath)) {
+    res.status(404).json({ error: 'Settings not found' });
+    return;
+  }
+
+  const settings = loadSettings(settingsPath);
+  if (!settings.presets || !settings.presets.some((p) => p.name === name)) {
+    res.status(404).json({ error: 'Preset not found' });
+    return;
+  }
+
+  settings.presets = settings.presets.filter((p) => p.name !== name);
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+
+  res.json({ success: true });
+});
+
 // ==================== Accounts ====================
 
 /**
@@ -1074,6 +1165,38 @@ apiRoutes.get('/cliproxy/status', async (_req: Request, res: Response): Promise<
   try {
     const running = await isCliproxyRunning();
     res.json({ running });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/cliproxy/models - Get available models from CLIProxyAPI
+ * Returns: { models: CliproxyModel[], byCategory: Record<string, CliproxyModel[]>, totalCount: number }
+ */
+apiRoutes.get('/cliproxy/models', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    // Check if proxy is running first
+    const running = await isCliproxyRunning();
+    if (!running) {
+      res.status(503).json({
+        error: 'CLIProxyAPI not running',
+        message: 'Start a CLIProxy session (gemini, codex, agy) to fetch available models',
+      });
+      return;
+    }
+
+    // Fetch models from /v1/models endpoint
+    const modelsResponse = await fetchCliproxyModels();
+    if (!modelsResponse) {
+      res.status(503).json({
+        error: 'Models unavailable',
+        message: 'CLIProxyAPI is running but /v1/models endpoint not responding',
+      });
+      return;
+    }
+
+    res.json(modelsResponse);
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

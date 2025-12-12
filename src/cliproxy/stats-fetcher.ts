@@ -5,7 +5,7 @@
  * Requires usage-statistics-enabled: true in config.yaml.
  */
 
-import { CCS_INTERNAL_API_KEY, CLIPROXY_DEFAULT_PORT } from './config-generator';
+import { CCS_CONTROL_PANEL_SECRET, CLIPROXY_DEFAULT_PORT } from './config-generator';
 
 /** Usage statistics from CLIProxyAPI */
 export interface CliproxyStats {
@@ -70,7 +70,7 @@ export async function fetchCliproxyStats(
       signal: controller.signal,
       headers: {
         Accept: 'application/json',
-        Authorization: `Bearer ${CCS_INTERNAL_API_KEY}`,
+        Authorization: `Bearer ${CCS_CONTROL_PANEL_SECRET}`,
       },
     });
 
@@ -114,6 +114,81 @@ export async function fetchCliproxyStats(
     };
   } catch {
     // CLIProxyAPI not running or stats endpoint not available
+    return null;
+  }
+}
+
+/** OpenAI-compatible model object from /v1/models endpoint */
+export interface CliproxyModel {
+  id: string;
+  object: string;
+  created: number;
+  owned_by: string;
+}
+
+/** Response from /v1/models endpoint */
+interface ModelsApiResponse {
+  data: CliproxyModel[];
+  object: string;
+}
+
+/** Categorized models response for UI */
+export interface CliproxyModelsResponse {
+  models: CliproxyModel[];
+  byCategory: Record<string, CliproxyModel[]>;
+  totalCount: number;
+}
+
+/**
+ * Fetch available models from CLIProxyAPI /v1/models endpoint
+ * @param port CLIProxyAPI port (default: 8317)
+ * @returns Categorized models or null if unavailable
+ */
+export async function fetchCliproxyModels(
+  port: number = CLIPROXY_DEFAULT_PORT
+): Promise<CliproxyModelsResponse | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    const response = await fetch(`http://127.0.0.1:${port}/v1/models`, {
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json',
+        // Use the internal API key for /v1 endpoints
+        Authorization: 'Bearer ccs-internal-managed',
+      },
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = (await response.json()) as ModelsApiResponse;
+
+    // Group models by owned_by field
+    const byCategory: Record<string, CliproxyModel[]> = {};
+    for (const model of data.data) {
+      const category = model.owned_by || 'other';
+      if (!byCategory[category]) {
+        byCategory[category] = [];
+      }
+      byCategory[category].push(model);
+    }
+
+    // Sort models within each category alphabetically
+    for (const category of Object.keys(byCategory)) {
+      byCategory[category].sort((a, b) => a.id.localeCompare(b.id));
+    }
+
+    return {
+      models: data.data,
+      byCategory,
+      totalCount: data.data.length,
+    };
+  } catch {
     return null;
   }
 }

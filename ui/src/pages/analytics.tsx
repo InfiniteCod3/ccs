@@ -11,7 +11,7 @@ import { startOfMonth, subDays, formatDistanceToNow } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverAnchor } from '@/components/ui/popover';
 import { DateRangeFilter } from '@/components/analytics/date-range-filter';
 import { UsageSummaryCards } from '@/components/analytics/usage-summary-cards';
 import { UsageTrendChart } from '@/components/analytics/usage-trend-chart';
@@ -19,16 +19,13 @@ import { ModelBreakdownChart } from '@/components/analytics/model-breakdown-char
 import { ModelDetailsContent } from '@/components/analytics/model-details-content';
 import { SessionStatsCard } from '@/components/analytics/session-stats-card';
 import { CliproxyStatsCard } from '@/components/analytics/cliproxy-stats-card';
-import { UsageInsightsCard } from '@/components/analytics/usage-insights-card';
-import { TrendingUp, PieChart, RefreshCw, DollarSign, ChevronRight, Lightbulb } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { TrendingUp, PieChart, RefreshCw, DollarSign, ChevronRight } from 'lucide-react';
 import {
   useUsageSummary,
   useUsageTrends,
   useModelUsage,
   useRefreshUsage,
   useUsageStatus,
-  useUsageInsights,
   useSessions,
   type ModelUsage,
 } from '@/hooks/use-usage';
@@ -75,7 +72,6 @@ export function AnalyticsPage() {
   const { data: summary, isLoading: isSummaryLoading } = useUsageSummary(apiOptions);
   const { data: trends, isLoading: isTrendsLoading } = useUsageTrends(apiOptions);
   const { data: models, isLoading: isModelsLoading } = useModelUsage(apiOptions);
-  const { data: insights, isLoading: isInsightsLoading } = useUsageInsights(apiOptions);
   const { data: sessions, isLoading: isSessionsLoading } = useSessions({ ...apiOptions, limit: 3 });
   const { data: status } = useUsageStatus();
 
@@ -116,40 +112,6 @@ export function AnalyticsPage() {
               { label: 'All Time', range: { from: undefined, to: new Date() } },
             ]}
           />
-
-          {/* Usage Insights Card (replaces popover) */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5 h-8" title="Usage Insights">
-                <Lightbulb
-                  className={`w-3.5 h-3.5 ${
-                    insights?.summary?.totalAnomalies ? 'text-amber-500' : 'text-green-500'
-                  }`}
-                />
-                <span className="text-xs">Insights</span>
-                {insights?.summary?.totalAnomalies ? (
-                  <Badge variant="destructive" className="h-4 px-1 text-[10px] font-bold ml-0.5">
-                    {insights.summary.totalAnomalies}
-                  </Badge>
-                ) : (
-                  <Badge
-                    variant="outline"
-                    className="h-4 px-1 text-[10px] font-bold ml-0.5 text-green-600 border-green-200 bg-green-50 dark:bg-green-900/10 dark:border-green-800"
-                  >
-                    OK
-                  </Badge>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-96 p-0 border-0 shadow-lg" align="end">
-              <UsageInsightsCard
-                anomalies={insights?.anomalies}
-                summary={insights?.summary}
-                isLoading={isInsightsLoading}
-                className="border-0 shadow-none max-h-[400px]"
-              />
-            </PopoverContent>
-          </Popover>
 
           {lastUpdatedText && (
             <span className="text-xs text-muted-foreground whitespace-nowrap">

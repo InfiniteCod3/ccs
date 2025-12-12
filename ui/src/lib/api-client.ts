@@ -92,6 +92,21 @@ export interface AuthFile {
   provider?: string;
 }
 
+/** CLIProxy model from /v1/models endpoint */
+export interface CliproxyModel {
+  id: string;
+  object: string;
+  created: number;
+  owned_by: string;
+}
+
+/** Categorized models response from CLIProxyAPI */
+export interface CliproxyModelsResponse {
+  models: CliproxyModel[];
+  byCategory: Record<string, CliproxyModel[]>;
+  totalCount: number;
+}
+
 /** Provider accounts summary */
 export type ProviderAccountsMap = Record<string, OAuthAccount[]>;
 
@@ -120,6 +135,23 @@ export interface MigrationResult {
 export interface SecretsExists {
   exists: boolean;
   keys: string[];
+}
+
+/** Model preset for quick model switching */
+export interface ModelPreset {
+  name: string;
+  default: string;
+  opus: string;
+  sonnet: string;
+  haiku: string;
+}
+
+export interface CreatePreset {
+  name: string;
+  default: string;
+  opus?: string;
+  sonnet?: string;
+  haiku?: string;
 }
 
 // API
@@ -155,10 +187,7 @@ export const api = {
 
     // Stats and models for Overview tab
     stats: () => request<{ usage: Record<string, unknown> }>('/cliproxy/usage'),
-    models: () =>
-      request<{
-        providers: Record<string, { currentModel: string; availableModels: string[] }>;
-      }>('/cliproxy/models'),
+    models: () => request<CliproxyModelsResponse>('/cliproxy/models'),
     updateModel: (provider: string, model: string) =>
       request(`/cliproxy/models/${provider}`, {
         method: 'PUT',
@@ -239,5 +268,18 @@ export const api = {
         body: JSON.stringify(secrets),
       }),
     exists: (profile: string) => request<SecretsExists>(`/secrets/${profile}/exists`),
+  },
+  /** Model presets for quick model switching */
+  presets: {
+    list: (profile: string) => request<{ presets: ModelPreset[] }>(`/settings/${profile}/presets`),
+    create: (profile: string, data: CreatePreset) =>
+      request<{ preset: ModelPreset }>(`/settings/${profile}/presets`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    delete: (profile: string, name: string) =>
+      request<{ success: boolean }>(`/settings/${profile}/presets/${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+      }),
   },
 };

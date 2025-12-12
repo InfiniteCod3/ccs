@@ -5,7 +5,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, type CreateVariant, type UpdateVariant } from '@/lib/api-client';
+import { api, type CreateVariant, type UpdateVariant, type CreatePreset } from '@/lib/api-client';
 import { toast } from 'sonner';
 
 export function useCliproxy() {
@@ -143,6 +143,48 @@ export function useUpdateModel() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cliproxy-models'] });
       toast.success('Model updated');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+// ==================== Presets ====================
+
+export function usePresets(profile: string) {
+  return useQuery({
+    queryKey: ['presets', profile],
+    queryFn: () => api.presets.list(profile),
+    enabled: !!profile,
+  });
+}
+
+export function useCreatePreset() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ profile, data }: { profile: string; data: CreatePreset }) =>
+      api.presets.create(profile, data),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['presets', variables.profile] });
+      toast.success(`Preset "${variables.data.name}" saved`);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+export function useDeletePreset() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ profile, name }: { profile: string; name: string }) =>
+      api.presets.delete(profile, name),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['presets', variables.profile] });
+      toast.success('Preset deleted');
     },
     onError: (error: Error) => {
       toast.error(error.message);

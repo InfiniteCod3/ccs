@@ -1,92 +1,142 @@
 /**
  * CLIProxy Page - Master-Detail Layout
  * Left sidebar: Provider navigation + Quick actions
- * Right panel: Provider details, accounts, preferences
+ * Right panel: Provider Editor with split-view (settings + code editor)
  */
 
 import { useState, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Plus,
-  Check,
-  X,
-  User,
-  Star,
-  Trash2,
-  Sparkles,
-  RefreshCw,
-  Settings,
-  FileText,
-  Terminal,
-  Zap,
-  Shield,
-  Clock,
-  MoreHorizontal,
-} from 'lucide-react';
+import { Check, X, RefreshCw, Sparkles, Zap, GitBranch, Trash2 } from 'lucide-react';
 import { QuickSetupWizard } from '@/components/quick-setup-wizard';
 import { AddAccountDialog } from '@/components/add-account-dialog';
-import { ConfigSplitView } from '@/components/cliproxy/config/config-split-view';
-import { LogViewer } from '@/components/cliproxy/logs/log-viewer';
+import { ProviderEditor } from '@/components/cliproxy/provider-editor';
+import { ProviderLogo } from '@/components/cliproxy/provider-logo';
+import type { ProviderCatalog } from '@/components/cliproxy/provider-model-selector';
 import {
   useCliproxy,
   useCliproxyAuth,
   useSetDefaultAccount,
   useRemoveAccount,
-  useCliproxyModels,
-  useUpdateModel,
+  useDeleteVariant,
 } from '@/hooks/use-cliproxy';
-import { useCliproxyStats } from '@/hooks/use-cliproxy-stats';
-import type { OAuthAccount, AuthStatus } from '@/lib/api-client';
+import type { AuthStatus, Variant } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 
-type ViewMode = 'overview' | 'config' | 'logs';
-
-// Provider icon component
-function ProviderIcon({ provider, className }: { provider: string; className?: string }) {
-  const iconMap: Record<string, { bg: string; text: string; letter: string }> = {
-    gemini: { bg: 'bg-blue-500/10', text: 'text-blue-600', letter: 'G' },
-    claude: { bg: 'bg-orange-500/10', text: 'text-orange-600', letter: 'C' },
-    codex: { bg: 'bg-green-500/10', text: 'text-green-600', letter: 'X' },
-    agy: { bg: 'bg-purple-500/10', text: 'text-purple-600', letter: 'A' },
-  };
-  const config = iconMap[provider.toLowerCase()] || {
-    bg: 'bg-gray-500/10',
-    text: 'text-gray-600',
-    letter: provider[0]?.toUpperCase() || '?',
-  };
-
-  return (
-    <div
-      className={cn(
-        'flex items-center justify-center w-8 h-8 rounded-lg font-semibold text-sm',
-        config.bg,
-        config.text,
-        className
-      )}
-    >
-      {config.letter}
-    </div>
-  );
-}
+// Model catalog data - mirrors src/cliproxy/model-catalog.ts
+const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
+  agy: {
+    provider: 'agy',
+    displayName: 'Antigravity',
+    defaultModel: 'gemini-claude-opus-4-5-thinking',
+    models: [
+      {
+        id: 'gemini-claude-opus-4-5-thinking',
+        name: 'Claude Opus 4.5 Thinking',
+        description: 'Most capable, extended thinking',
+      },
+      {
+        id: 'gemini-claude-sonnet-4-5-thinking',
+        name: 'Claude Sonnet 4.5 Thinking',
+        description: 'Balanced with extended thinking',
+      },
+      {
+        id: 'gemini-claude-sonnet-4-5',
+        name: 'Claude Sonnet 4.5',
+        description: 'Fast and capable',
+      },
+      {
+        id: 'gemini-3-pro-preview',
+        name: 'Gemini 3 Pro',
+        description: 'Google latest model via Antigravity',
+      },
+    ],
+  },
+  gemini: {
+    provider: 'gemini',
+    displayName: 'Gemini',
+    defaultModel: 'gemini-2.5-pro',
+    models: [
+      {
+        id: 'gemini-3-pro-preview',
+        name: 'Gemini 3 Pro',
+        tier: 'paid',
+        description: 'Latest model, requires paid Google account',
+      },
+      {
+        id: 'gemini-2.5-pro',
+        name: 'Gemini 2.5 Pro',
+        description: 'Stable, works with free Google account',
+      },
+    ],
+  },
+  codex: {
+    provider: 'codex',
+    displayName: 'Codex',
+    defaultModel: 'gpt-5.1-codex-max',
+    models: [
+      {
+        id: 'gpt-5.1-codex-max',
+        name: 'Codex Max (5.1)',
+        description: 'Most capable Codex model',
+        presetMapping: {
+          default: 'gpt-5.1-codex-max',
+          opus: 'gpt-5.1-codex-max-high',
+          sonnet: 'gpt-5.1-codex-max',
+          haiku: 'gpt-5.1-codex-mini-high',
+        },
+      },
+      {
+        id: 'gpt-5.2',
+        name: 'GPT 5.2',
+        description: 'Latest GPT model',
+        presetMapping: {
+          default: 'gpt-5.2',
+          opus: 'gpt-5.2',
+          sonnet: 'gpt-5.2',
+          haiku: 'gpt-5.2',
+        },
+      },
+      {
+        id: 'gpt-5.1-codex-mini',
+        name: 'Codex Mini',
+        description: 'Fast and efficient Codex model',
+      },
+    ],
+  },
+  qwen: {
+    provider: 'qwen',
+    displayName: 'Qwen',
+    defaultModel: 'qwen-coder-plus',
+    models: [
+      {
+        id: 'qwen-coder-plus',
+        name: 'Qwen Coder Plus',
+        description: 'Alibaba code-focused model',
+      },
+      {
+        id: 'qwen-max',
+        name: 'Qwen Max',
+        description: 'Most capable Qwen model',
+      },
+    ],
+  },
+  iflow: {
+    provider: 'iflow',
+    displayName: 'iFlow',
+    defaultModel: 'iflow-default',
+    models: [
+      {
+        id: 'iflow-default',
+        name: 'iFlow Default',
+        description: 'Default iFlow model',
+      },
+    ],
+  },
+};
 
 // Sidebar provider item
 function ProviderSidebarItem({
@@ -110,7 +160,7 @@ function ProviderSidebarItem({
       )}
       onClick={onSelect}
     >
-      <ProviderIcon provider={status.provider} />
+      <ProviderLogo provider={status.provider} size="md" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm truncate">{status.displayName}</span>
@@ -138,259 +188,70 @@ function ProviderSidebarItem({
   );
 }
 
-// Quick action item in sidebar
-function QuickActionItem({
-  icon: Icon,
-  label,
-  isActive,
-  onClick,
+// Sidebar variant item (user-created provider variants)
+function VariantSidebarItem({
+  variant,
+  parentAuth,
+  isSelected,
+  onSelect,
+  onDelete,
+  isDeleting,
 }: {
-  icon: React.ElementType;
-  label: string;
-  isActive: boolean;
-  onClick: () => void;
+  variant: Variant;
+  parentAuth?: AuthStatus;
+  isSelected: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+  isDeleting?: boolean;
 }) {
   return (
     <button
       className={cn(
-        'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors cursor-pointer text-left text-sm',
-        isActive ? 'bg-muted font-medium' : 'hover:bg-muted/50 text-muted-foreground'
+        'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors cursor-pointer text-left pl-6',
+        isSelected
+          ? 'bg-primary/10 border border-primary/20'
+          : 'hover:bg-muted border border-transparent'
       )}
-      onClick={onClick}
+      onClick={onSelect}
     >
-      <Icon className="w-4 h-4" />
-      <span>{label}</span>
-    </button>
-  );
-}
-
-// Account badge with actions
-function AccountBadge({
-  account,
-  onSetDefault,
-  onRemove,
-  isRemoving,
-}: {
-  account: OAuthAccount;
-  onSetDefault: () => void;
-  onRemove: () => void;
-  isRemoving: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        'flex items-center justify-between p-3 rounded-lg border transition-colors',
-        account.isDefault ? 'border-primary/30 bg-primary/5' : 'border-border hover:bg-muted/30'
-      )}
-    >
-      <div className="flex items-center gap-3">
-        <div
-          className={cn(
-            'flex items-center justify-center w-8 h-8 rounded-full',
-            account.isDefault ? 'bg-primary/10' : 'bg-muted'
-          )}
-        >
-          <User className="w-4 h-4" />
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-sm">{account.email || account.id}</span>
-            {account.isDefault && (
-              <Badge variant="secondary" className="text-[10px] h-4 px-1.5 gap-0.5">
-                <Star className="w-2.5 h-2.5 fill-current" />
-                Default
-              </Badge>
-            )}
-          </div>
-          {account.lastUsedAt && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-              <Clock className="w-3 h-3" />
-              Last used: {new Date(account.lastUsedAt).toLocaleDateString()}
-            </div>
-          )}
-        </div>
+      <div className="relative">
+        <ProviderLogo provider={variant.provider} size="sm" />
+        <GitBranch className="w-2.5 h-2.5 absolute -bottom-0.5 -right-0.5 text-muted-foreground" />
       </div>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-7 w-7">
-            <MoreHorizontal className="w-4 h-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {!account.isDefault && (
-            <DropdownMenuItem onClick={onSetDefault}>
-              <Star className="w-4 h-4 mr-2" />
-              Set as default
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem
-            className="text-destructive focus:text-destructive"
-            onClick={onRemove}
-            disabled={isRemoving}
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            {isRemoving ? 'Removing...' : 'Remove account'}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
-}
-
-// Provider detail panel
-function ProviderDetailPanel({
-  status,
-  onAddAccount,
-}: {
-  status: AuthStatus;
-  onAddAccount: () => void;
-}) {
-  const setDefaultMutation = useSetDefaultAccount();
-  const removeMutation = useRemoveAccount();
-  const { data: modelsData } = useCliproxyModels();
-  const updateModelMutation = useUpdateModel();
-  const { data: statsData } = useCliproxyStats();
-
-  const accounts = status.accounts || [];
-  const providerData = modelsData?.providers?.[status.provider];
-  const providerModels = providerData?.availableModels || [];
-  const currentModel = providerData?.currentModel;
-
-  // Get stats for this provider
-  const providerRequestCount = useMemo(() => {
-    if (!statsData?.requestsByProvider) return null;
-    return statsData.requestsByProvider[status.provider] ?? null;
-  }, [statsData, status.provider]);
-
-  return (
-    <div className="flex-1 flex flex-col min-w-0 p-6 overflow-auto">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <ProviderIcon provider={status.provider} className="w-12 h-12 text-lg" />
-          <div>
-            <h2 className="text-xl font-semibold">{status.displayName}</h2>
-            <div className="flex items-center gap-2 mt-1">
-              {status.authenticated ? (
-                <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">
-                  <Shield className="w-3 h-3 mr-1" />
-                  Authenticated
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-muted-foreground">
-                  <X className="w-3 h-3 mr-1" />
-                  Not connected
-                </Badge>
-              )}
-              {providerRequestCount !== null && providerRequestCount > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  <Zap className="w-3 h-3 mr-1" />
-                  {providerRequestCount.toLocaleString()} requests
-                </Badge>
-              )}
-            </div>
-          </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-sm truncate">{variant.name}</span>
+          <Badge variant="outline" className="text-[9px] h-4 px-1">
+            variant
+          </Badge>
         </div>
-
-        <Button onClick={onAddAccount} className="gap-2">
-          <Plus className="w-4 h-4" />
-          Add Account
-        </Button>
-      </div>
-
-      {/* Model Preference */}
-      <Card className="mb-4">
-        <CardHeader className="py-3 px-4">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Settings className="w-4 h-4" />
-            Model Preference
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-4 pt-0">
-          <div className="flex items-center gap-4">
-            <Select
-              value={currentModel || ''}
-              onValueChange={(value) => {
-                updateModelMutation.mutate({ provider: status.provider, model: value });
-              }}
-              disabled={updateModelMutation.isPending}
-            >
-              <SelectTrigger className="w-[280px]">
-                <SelectValue placeholder="Select preferred model" />
-              </SelectTrigger>
-              <SelectContent>
-                {providerModels.map((model: string) => (
-                  <SelectItem key={model} value={model}>
-                    {model}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {updateModelMutation.isPending && (
-              <span className="text-xs text-muted-foreground">Updating...</span>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Accounts */}
-      <Card className="flex-1">
-        <CardHeader className="py-3 px-4">
-          <CardTitle className="text-sm font-medium flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <User className="w-4 h-4" />
-              Accounts
-              {accounts.length > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  {accounts.length}
-                </Badge>
-              )}
-            </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-4 pt-0">
-          {accounts.length > 0 ? (
-            <div className="space-y-2">
-              {accounts.map((account) => (
-                <AccountBadge
-                  key={account.id}
-                  account={account}
-                  onSetDefault={() =>
-                    setDefaultMutation.mutate({
-                      provider: status.provider,
-                      accountId: account.id,
-                    })
-                  }
-                  onRemove={() =>
-                    removeMutation.mutate({
-                      provider: status.provider,
-                      accountId: account.id,
-                    })
-                  }
-                  isRemoving={removeMutation.isPending}
-                />
-              ))}
-            </div>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          {parentAuth?.authenticated ? (
+            <>
+              <Check className="w-3 h-3 text-green-600" />
+              <span className="text-xs text-muted-foreground truncate">via {variant.provider}</span>
+            </>
           ) : (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
-                <User className="w-6 h-6 text-muted-foreground" />
-              </div>
-              <p className="text-sm text-muted-foreground mb-3">
-                {status.authenticated
-                  ? 'No specific accounts tracked'
-                  : 'Connect an account to get started'}
-              </p>
-              <Button variant="outline" size="sm" onClick={onAddAccount} className="gap-2">
-                <Plus className="w-4 h-4" />
-                Add Account
-              </Button>
-            </div>
+            <>
+              <X className="w-3 h-3 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Parent not connected</span>
+            </>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:text-destructive"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        disabled={isDeleting}
+      >
+        <Trash2 className="w-3 h-3" />
+      </Button>
+    </button>
   );
 }
 
@@ -402,10 +263,17 @@ function EmptyProviderState({ onSetup }: { onSetup: () => void }) {
         <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-6">
           <Zap className="w-8 h-8 text-muted-foreground" />
         </div>
-        <h2 className="text-xl font-semibold mb-2">CLIProxy Manager</h2>
-        <p className="text-muted-foreground mb-6">
-          Manage OAuth authentication for Claude CLI proxy providers. Select a provider from the
-          sidebar or run the quick setup wizard.
+        <h2 className="text-xl font-semibold mb-2">CCS Profile Manager</h2>
+        <p className="text-muted-foreground mb-4">
+          Manage OAuth authentication, account preferences, and model selection for CLIProxy
+          providers. Configure how CCS routes requests to different AI backends.
+        </p>
+        <p className="text-xs text-muted-foreground mb-6">
+          For live usage stats and real-time monitoring, visit the{' '}
+          <a href="/cliproxy/control-panel" className="text-primary hover:underline">
+            Control Panel
+          </a>
+          .
         </p>
         <Button onClick={onSetup} className="gap-2">
           <Sparkles className="w-4 h-4" />
@@ -419,30 +287,52 @@ function EmptyProviderState({ onSetup }: { onSetup: () => void }) {
 export function CliproxyPage() {
   const queryClient = useQueryClient();
   const { data: authData, isLoading: authLoading } = useCliproxyAuth();
-  const { isFetching } = useCliproxy();
+  const { data: variantsData, isFetching } = useCliproxy();
+  const setDefaultMutation = useSetDefaultAccount();
+  const removeMutation = useRemoveAccount();
+  const deleteMutation = useDeleteVariant();
 
+  // Selection state: either a provider or a variant
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('overview');
+  const [selectedVariant, setSelectedVariant] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [addAccountProvider, setAddAccountProvider] = useState<{
     provider: string;
     displayName: string;
   } | null>(null);
 
-  // Auto-select first provider if none selected
   const providers = authData?.authStatus || [];
+  const variants = variantsData?.variants || [];
+
+  // Auto-select first provider if nothing selected
   const effectiveProvider = useMemo(() => {
+    // If a variant is selected, no provider is effective
+    if (selectedVariant) return null;
     if (selectedProvider && providers.some((p) => p.provider === selectedProvider)) {
       return selectedProvider;
     }
     return providers.length > 0 ? providers[0].provider : null;
-  }, [selectedProvider, providers]);
+  }, [selectedProvider, selectedVariant, providers]);
 
   const selectedStatus = providers.find((p) => p.provider === effectiveProvider);
+  const selectedVariantData = variants.find((v) => v.name === selectedVariant);
+  const parentAuthForVariant = selectedVariantData
+    ? providers.find((p) => p.provider === selectedVariantData.provider)
+    : undefined;
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['cliproxy'] });
     queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+  };
+
+  const handleSelectProvider = (provider: string) => {
+    setSelectedProvider(provider);
+    setSelectedVariant(null);
+  };
+
+  const handleSelectVariant = (variantName: string) => {
+    setSelectedVariant(variantName);
+    setSelectedProvider(null);
   };
 
   return (
@@ -451,7 +341,7 @@ export function CliproxyPage() {
       <div className="w-64 border-r flex flex-col bg-muted/30">
         {/* Header */}
         <div className="p-4 border-b bg-background">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
               <Zap className="w-5 h-5 text-primary" />
               <h1 className="font-semibold">CLIProxy</h1>
@@ -466,6 +356,7 @@ export function CliproxyPage() {
               <RefreshCw className={cn('w-4 h-4', isFetching && 'animate-spin')} />
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground mb-3">CCS-level account management</p>
 
           <Button
             variant="outline"
@@ -496,38 +387,35 @@ export function CliproxyPage() {
                   <ProviderSidebarItem
                     key={status.provider}
                     status={status}
-                    isSelected={effectiveProvider === status.provider && viewMode === 'overview'}
-                    onSelect={() => {
-                      setSelectedProvider(status.provider);
-                      setViewMode('overview');
-                    }}
+                    isSelected={effectiveProvider === status.provider}
+                    onSelect={() => handleSelectProvider(status.provider)}
                   />
                 ))}
               </div>
             )}
-          </div>
 
-          <Separator className="my-2" />
-
-          {/* Quick Actions */}
-          <div className="p-2">
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-3 py-2">
-              Tools
-            </div>
-            <div className="space-y-1">
-              <QuickActionItem
-                icon={FileText}
-                label="Config Editor"
-                isActive={viewMode === 'config'}
-                onClick={() => setViewMode('config')}
-              />
-              <QuickActionItem
-                icon={Terminal}
-                label="Logs"
-                isActive={viewMode === 'logs'}
-                onClick={() => setViewMode('logs')}
-              />
-            </div>
+            {/* Variants Section */}
+            {variants.length > 0 && (
+              <>
+                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-3 py-2 mt-4 flex items-center gap-1.5">
+                  <GitBranch className="w-3 h-3" />
+                  Variants
+                </div>
+                <div className="space-y-1">
+                  {variants.map((variant) => (
+                    <VariantSidebarItem
+                      key={variant.name}
+                      variant={variant}
+                      parentAuth={providers.find((p) => p.provider === variant.provider)}
+                      isSelected={selectedVariant === variant.name}
+                      onSelect={() => handleSelectVariant(variant.name)}
+                      onDelete={() => deleteMutation.mutate(variant.name)}
+                      isDeleting={deleteMutation.isPending}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </ScrollArea>
 
@@ -547,23 +435,59 @@ export function CliproxyPage() {
 
       {/* Right Panel */}
       <div className="flex-1 flex flex-col min-w-0 bg-background">
-        {viewMode === 'config' ? (
-          <div className="flex-1 p-4">
-            <ConfigSplitView />
-          </div>
-        ) : viewMode === 'logs' ? (
-          <div className="flex-1 p-4">
-            <LogViewer />
-          </div>
+        {selectedVariantData && parentAuthForVariant ? (
+          // Variant selected - show ProviderEditor with variant profile name
+          <ProviderEditor
+            provider={selectedVariantData.name}
+            displayName={`${selectedVariantData.name} (${selectedVariantData.provider} variant)`}
+            authStatus={parentAuthForVariant}
+            catalog={MODEL_CATALOGS[selectedVariantData.provider]}
+            logoProvider={selectedVariantData.provider}
+            onAddAccount={() =>
+              setAddAccountProvider({
+                provider: selectedVariantData.provider,
+                displayName: parentAuthForVariant.displayName,
+              })
+            }
+            onSetDefault={(accountId) =>
+              setDefaultMutation.mutate({
+                provider: selectedVariantData.provider,
+                accountId,
+              })
+            }
+            onRemoveAccount={(accountId) =>
+              removeMutation.mutate({
+                provider: selectedVariantData.provider,
+                accountId,
+              })
+            }
+            isRemovingAccount={removeMutation.isPending}
+          />
         ) : selectedStatus ? (
-          <ProviderDetailPanel
-            status={selectedStatus}
+          <ProviderEditor
+            provider={selectedStatus.provider}
+            displayName={selectedStatus.displayName}
+            authStatus={selectedStatus}
+            catalog={MODEL_CATALOGS[selectedStatus.provider]}
             onAddAccount={() =>
               setAddAccountProvider({
                 provider: selectedStatus.provider,
                 displayName: selectedStatus.displayName,
               })
             }
+            onSetDefault={(accountId) =>
+              setDefaultMutation.mutate({
+                provider: selectedStatus.provider,
+                accountId,
+              })
+            }
+            onRemoveAccount={(accountId) =>
+              removeMutation.mutate({
+                provider: selectedStatus.provider,
+                accountId,
+              })
+            }
+            isRemovingAccount={removeMutation.isPending}
           />
         ) : (
           <EmptyProviderState onSetup={() => setWizardOpen(true)} />

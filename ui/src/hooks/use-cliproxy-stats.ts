@@ -72,3 +72,43 @@ export function useCliproxyStats(enabled = true) {
     staleTime: 10000, // Consider data stale after 10 seconds
   });
 }
+
+/** CLIProxy model from /v1/models endpoint */
+export interface CliproxyModel {
+  id: string;
+  object: string;
+  created: number;
+  owned_by: string;
+}
+
+/** Categorized models response */
+export interface CliproxyModelsResponse {
+  models: CliproxyModel[];
+  byCategory: Record<string, CliproxyModel[]>;
+  totalCount: number;
+}
+
+/**
+ * Fetch CLIProxy models from API
+ */
+async function fetchCliproxyModels(): Promise<CliproxyModelsResponse> {
+  const response = await fetch('/api/cliproxy/models');
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to fetch models');
+  }
+  return response.json();
+}
+
+/**
+ * Hook to get available CLIProxy models (categorized by provider)
+ */
+export function useCliproxyModels(enabled = true) {
+  return useQuery({
+    queryKey: ['cliproxy-models'],
+    queryFn: fetchCliproxyModels,
+    enabled,
+    staleTime: 60000, // Models don't change often, cache for 1 minute
+    retry: 1,
+  });
+}

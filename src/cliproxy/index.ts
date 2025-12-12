@@ -117,3 +117,7 @@ export {
   OPENROUTER_TEMPLATE,
   TOGETHER_TEMPLATE,
 } from './openai-compat-manager';
+
+// Service manager (background CLIProxy for dashboard)
+export type { ServiceStartResult } from './service-manager';
+export { ensureCliproxyService, stopCliproxyService, getServiceStatus } from './service-manager';

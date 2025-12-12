@@ -1,3 +1,13 @@
+# [5.16.0](https://github.com/kaitranntt/ccs/compare/v5.15.0...v5.16.0) (2025-12-12)
+
+
+### Features
+
+* **cliproxy:** add provider editor with presets and control panel ([92b7065](https://github.com/kaitranntt/ccs/commit/92b7065e10618285988b4a539b503f54e5cf4baf))
+* **cliproxy:** add stats fetcher and OpenAI-compatible model manager ([a94c3d6](https://github.com/kaitranntt/ccs/commit/a94c3d66004ba0921835bddd8ca5c168868e72d5))
+* **ui:** add cliproxy stats overview and enhance analytics components ([c3b2d50](https://github.com/kaitranntt/ccs/commit/c3b2d50269b5ad515409cc562e204d94ab65dd87))
+* **ui:** redesign cliproxy page with master-detail layout ([f8648be](https://github.com/kaitranntt/ccs/commit/f8648be6d9a9e6e94624fe700dfd9bcd1e2dbc5b))
+
 # [5.15.0](https://github.com/kaitranntt/ccs/compare/v5.14.0...v5.15.0) (2025-12-11)
 
 

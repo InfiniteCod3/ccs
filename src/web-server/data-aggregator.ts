@@ -10,6 +10,7 @@ import { calculateCost } from './model-pricing';
 import {
   type ModelBreakdown,
   type DailyUsage,
+  type HourlyUsage,
   type MonthlyUsage,
   type SessionUsage,
 } from './usage-types';
@@ -26,6 +27,13 @@ function extractDate(timestamp: string): string {
 /** Extract YYYY-MM from ISO timestamp */
 function extractMonth(timestamp: string): string {
   return timestamp.slice(0, 7);
+}
+
+/** Extract YYYY-MM-DD HH:00 from ISO timestamp */
+function extractHour(timestamp: string): string {
+  const date = timestamp.slice(0, 10);
+  const hour = timestamp.slice(11, 13) || '00';
+  return `${date} ${hour}:00`;
 }
 
 /** Create model breakdown from accumulated data */
@@ -150,6 +158,99 @@ export function aggregateDailyUsage(
   dailyUsage.sort((a, b) => b.date.localeCompare(a.date));
 
   return dailyUsage;
+}
+
+// ============================================================================
+// HOURLY AGGREGATION
+// ============================================================================
+
+/**
+ * Aggregate raw entries into hourly usage summaries
+ * Groups by hour (YYYY-MM-DD HH:00), calculates costs per model
+ */
+export function aggregateHourlyUsage(
+  entries: RawUsageEntry[],
+  source = 'custom-parser'
+): HourlyUsage[] {
+  // Group entries by hour
+  const byHour = new Map<string, RawUsageEntry[]>();
+
+  for (const entry of entries) {
+    const hour = extractHour(entry.timestamp);
+    const existing = byHour.get(hour) || [];
+    existing.push(entry);
+    byHour.set(hour, existing);
+  }
+
+  // Build hourly summaries
+  const hourlyUsage: HourlyUsage[] = [];
+
+  for (const [hour, hourEntries] of byHour) {
+    // Aggregate by model
+    const modelMap = new Map<string, ModelAccumulator>();
+    let totalInput = 0;
+    let totalOutput = 0;
+    let totalCacheCreation = 0;
+    let totalCacheRead = 0;
+
+    for (const entry of hourEntries) {
+      const model = entry.model;
+      const acc = modelMap.get(model) || {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+      };
+
+      acc.inputTokens += entry.inputTokens;
+      acc.outputTokens += entry.outputTokens;
+      acc.cacheCreationTokens += entry.cacheCreationTokens;
+      acc.cacheReadTokens += entry.cacheReadTokens;
+      modelMap.set(model, acc);
+
+      totalInput += entry.inputTokens;
+      totalOutput += entry.outputTokens;
+      totalCacheCreation += entry.cacheCreationTokens;
+      totalCacheRead += entry.cacheReadTokens;
+    }
+
+    // Build model breakdowns
+    const modelBreakdowns: ModelBreakdown[] = [];
+    let totalCost = 0;
+
+    for (const [modelName, acc] of modelMap) {
+      const breakdown = createModelBreakdown(
+        modelName,
+        acc.inputTokens,
+        acc.outputTokens,
+        acc.cacheCreationTokens,
+        acc.cacheReadTokens
+      );
+      modelBreakdowns.push(breakdown);
+      totalCost += breakdown.cost;
+    }
+
+    // Sort breakdowns by cost descending
+    modelBreakdowns.sort((a, b) => b.cost - a.cost);
+
+    hourlyUsage.push({
+      hour,
+      source,
+      inputTokens: totalInput,
+      outputTokens: totalOutput,
+      cacheCreationTokens: totalCacheCreation,
+      cacheReadTokens: totalCacheRead,
+      cost: totalCost,
+      totalCost,
+      modelsUsed: Array.from(modelMap.keys()),
+      modelBreakdowns,
+    });
+  }
+
+  // Sort by hour descending (most recent first)
+  hourlyUsage.sort((a, b) => b.hour.localeCompare(a.hour));
+
+  return hourlyUsage;
 }
 
 // ============================================================================
@@ -373,6 +474,14 @@ export async function loadDailyUsageData(options?: ParserOptions): Promise<Daily
 }
 
 /**
+ * Load hourly usage data for today's chart
+ */
+export async function loadHourlyUsageData(options?: ParserOptions): Promise<HourlyUsage[]> {
+  const entries = await scanProjectsDirectory(options);
+  return aggregateHourlyUsage(entries);
+}
+
+/**
  * Load monthly usage data (replaces better-ccusage loadMonthlyUsageData)
  */
 export async function loadMonthlyUsageData(options?: ParserOptions): Promise<MonthlyUsage[]> {
@@ -393,12 +502,14 @@ export async function loadSessionData(options?: ParserOptions): Promise<SessionU
  */
 export async function loadAllUsageData(options?: ParserOptions): Promise<{
   daily: DailyUsage[];
+  hourly: HourlyUsage[];
   monthly: MonthlyUsage[];
   session: SessionUsage[];
 }> {
   const entries = await scanProjectsDirectory(options);
   return {
     daily: aggregateDailyUsage(entries),
+    hourly: aggregateHourlyUsage(entries),
     monthly: aggregateMonthlyUsage(entries),
     session: aggregateSessionUsage(entries),
   };

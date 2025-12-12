@@ -2,7 +2,7 @@
  * Usage Trend Chart Component
  *
  * Displays usage trends over time with tokens and cost.
- * Supports daily and monthly granularity with interactive tooltips.
+ * Supports daily, hourly, and monthly granularity with interactive tooltips.
  */
 
 import { useMemo } from 'react';
@@ -17,15 +17,15 @@ import {
 } from 'recharts';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { DateRange } from 'react-day-picker';
 import { cn } from '@/lib/utils';
-import type { DailyUsage } from '@/hooks/use-usage';
+import type { DailyUsage, HourlyUsage } from '@/hooks/use-usage';
+
+type ChartData = DailyUsage | HourlyUsage;
 
 interface UsageTrendChartProps {
-  data: DailyUsage[];
+  data: ChartData[];
   isLoading?: boolean;
-  dateRange?: DateRange;
-  granularity?: 'daily' | 'monthly';
+  granularity?: 'daily' | 'monthly' | 'hourly';
   className?: string;
 }
 
@@ -34,15 +34,22 @@ export function UsageTrendChart({
   isLoading,
   granularity = 'daily',
   className,
-}: Omit<UsageTrendChartProps, 'dateRange'>) {
+}: UsageTrendChartProps) {
   const chartData = useMemo(() => {
     if (!data || data.length === 0) return [];
 
-    return [...data].reverse().map((item) => ({
-      ...item,
-      dateFormatted: formatDate(item.date, granularity),
-      costRounded: Number(item.cost.toFixed(4)),
-    }));
+    // For hourly data, already sorted ascending from API
+    const sortedData = granularity === 'hourly' ? data : [...data].reverse();
+
+    return sortedData.map((item) => {
+      // Handle hourly vs daily data format
+      const timeKey = 'hour' in item ? item.hour : (item as DailyUsage).date;
+      return {
+        ...item,
+        dateFormatted: formatTime(timeKey, granularity),
+        costRounded: Number(item.cost.toFixed(4)),
+      };
+    });
   }, [data, granularity]);
 
   if (isLoading) {
@@ -52,7 +59,9 @@ export function UsageTrendChart({
   if (!data || data.length === 0) {
     return (
       <div className={cn('h-full flex items-center justify-center', className)}>
-        <p className="text-muted-foreground">No usage data available</p>
+        <p className="text-muted-foreground">
+          {granularity === 'hourly' ? 'No usage data for today' : 'No usage data available'}
+        </p>
       </div>
     );
   }
@@ -103,7 +112,7 @@ export function UsageTrendChart({
             content={({ active, payload, label }) => {
               if (!active || !payload || !payload.length) return null;
 
-              const data = payload[0].payload;
+              const tooltipData = payload[0].payload;
               return (
                 <div className="rounded-lg border bg-background p-3 shadow-lg">
                   <p className="font-medium mb-2">{label}</p>
@@ -115,7 +124,11 @@ export function UsageTrendChart({
                         : `$${entry.value}`}
                     </p>
                   ))}
-                  <p className="text-sm text-muted-foreground mt-1">Requests: {data.requests}</p>
+                  {'requests' in tooltipData && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Requests: {tooltipData.requests}
+                    </p>
+                  )}
                 </div>
               );
             }}
@@ -149,14 +162,26 @@ export function UsageTrendChart({
 }
 
 // Helper functions
-function formatDate(dateStr: string, granularity: 'daily' | 'monthly'): string {
-  const date = new Date(dateStr);
+function formatTime(timeStr: string, granularity: 'daily' | 'monthly' | 'hourly'): string {
+  if (granularity === 'hourly') {
+    // Format: "YYYY-MM-DD HH:00" -> convert UTC to local time -> "HH:00"
+    // Parse as UTC and format in local timezone
+    const [datePart, timePart] = timeStr.split(' ');
+    if (datePart && timePart) {
+      // Create date in UTC: "2025-12-12 20:00" -> "2025-12-12T20:00:00Z"
+      const utcDate = new Date(`${datePart}T${timePart}:00Z`);
+      return format(utcDate, 'HH:mm');
+    }
+    return timeStr;
+  }
+
+  const date = new Date(timeStr);
 
   if (granularity === 'monthly') {
     return format(date, 'MMM yyyy');
   }
 
-  // For daily, show shorter format if range is > 30 days
+  // For daily, show shorter format
   return format(date, 'MMM dd');
 }
 

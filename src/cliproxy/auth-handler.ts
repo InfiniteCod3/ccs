@@ -20,6 +20,7 @@ import { ok, fail, info, warn } from '../utils/ui';
 import { ensureCLIProxyBinary } from './binary-manager';
 import { generateConfig, getProviderAuthDir } from './config-generator';
 import { CLIProxyProvider } from './types';
+import { getKillCLIProxyCommand } from '../utils/platform-commands';
 import {
   AccountInfo,
   discoverExistingAccounts,
@@ -636,7 +637,8 @@ export async function triggerOAuth(
             console.error('    Try: ccs qwen --auth --verbose');
           } else {
             console.error('    The OAuth flow may have been cancelled or callback port was in use');
-            console.error(`    Try: pkill -f cli-proxy-api && ccs ${provider} --auth`);
+            console.error(`    Try: ${getKillCLIProxyCommand()} && ccs ${provider} --auth`);
+            console.error('    Or run: ccs doctor --fix');
           }
           resolve(null);
         }

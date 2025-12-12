@@ -432,9 +432,7 @@ export function QuickSetupWizard({ open, onClose }: QuickSetupWizardProps) {
                         <div className="flex items-center gap-2">
                           <span>{m.name}</span>
                           {m.description && (
-                            <span className="text-xs text-muted-foreground">
-                              - {m.description}
-                            </span>
+                            <span className="text-xs text-muted-foreground">- {m.description}</span>
                           )}
                         </div>
                       </SelectItem>

@@ -23,6 +23,7 @@ import { TrendingUp, PieChart, RefreshCw, DollarSign, ChevronRight } from 'lucid
 import {
   useUsageSummary,
   useUsageTrends,
+  useHourlyUsage,
   useModelUsage,
   useRefreshUsage,
   useUsageStatus,
@@ -48,6 +49,7 @@ export function AnalyticsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedModel, setSelectedModel] = useState<ModelUsage | null>(null);
   const [popoverPosition, setPopoverPosition] = useState<{ x: number; y: number } | null>(null);
+  const [viewMode, setViewMode] = useState<'daily' | 'hourly'>('daily');
   const popoverAnchorRef = useRef<HTMLDivElement>(null);
 
   // Refresh hook
@@ -71,9 +73,23 @@ export function AnalyticsPage() {
   // Fetch data
   const { data: summary, isLoading: isSummaryLoading } = useUsageSummary(apiOptions);
   const { data: trends, isLoading: isTrendsLoading } = useUsageTrends(apiOptions);
+  const { data: hourlyData, isLoading: isHourlyLoading } = useHourlyUsage(apiOptions);
   const { data: models, isLoading: isModelsLoading } = useModelUsage(apiOptions);
   const { data: sessions, isLoading: isSessionsLoading } = useSessions({ ...apiOptions, limit: 3 });
   const { data: status } = useUsageStatus();
+
+  // Handle "24H" preset click
+  const handleTodayClick = useCallback(() => {
+    const now = new Date();
+    setDateRange({ from: subDays(now, 1), to: now });
+    setViewMode('hourly');
+  }, []);
+
+  // Handle date range changes from DateRangeFilter
+  const handleDateRangeChange = useCallback((range: DateRange | undefined) => {
+    setDateRange(range);
+    setViewMode('daily'); // Switch back to daily view for multi-day ranges
+  }, []);
 
   // Format "Last updated" text
   const lastUpdatedText = useMemo(() => {
@@ -102,9 +118,17 @@ export function AnalyticsPage() {
           <p className="text-sm text-muted-foreground">Track usage & insights</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant={viewMode === 'hourly' ? 'default' : 'outline'}
+            size="sm"
+            className="h-8"
+            onClick={handleTodayClick}
+          >
+            24H
+          </Button>
           <DateRangeFilter
             value={dateRange}
-            onChange={setDateRange}
+            onChange={handleDateRangeChange}
             presets={[
               { label: '7D', range: { from: subDays(new Date(), 7), to: new Date() } },
               { label: '30D', range: { from: subDays(new Date(), 30), to: new Date() } },
@@ -140,11 +164,15 @@ export function AnalyticsPage() {
           <CardHeader className="px-3 py-2 shrink-0">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <TrendingUp className="w-4 h-4" />
-              Usage Trends
+              {viewMode === 'hourly' ? 'Last 24 Hours' : 'Usage Trends'}
             </CardTitle>
           </CardHeader>
           <CardContent className="px-3 pb-3 pt-0 flex-1 min-h-0">
-            <UsageTrendChart data={trends || []} isLoading={isTrendsLoading} />
+            <UsageTrendChart
+              data={viewMode === 'hourly' ? hourlyData || [] : trends || []}
+              isLoading={viewMode === 'hourly' ? isHourlyLoading : isTrendsLoading}
+              granularity={viewMode === 'hourly' ? 'hourly' : 'daily'}
+            />
           </CardContent>
         </Card>
 
@@ -291,7 +319,7 @@ export function AnalyticsPage() {
           />
 
           {/* CLIProxy Stats - 2/10 width */}
-          <CliproxyStatsCard className="lg:col-span-2" />
+          <CliproxyStatsCard isLoading={isSummaryLoading} className="lg:col-span-2" />
         </div>
 
         {/* Model Details Popover - positioned at cursor */}

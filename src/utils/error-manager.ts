@@ -1,5 +1,6 @@
 import { initUI, header, color, dim, errorBox } from './ui';
 import { ERROR_CODES, getErrorDocUrl, ErrorCode } from './error-codes';
+import { getPortCheckCommand, getKillPidCommand } from './platform-commands';
 
 /**
  * Error types with structured messages (Legacy - kept for compatibility)
@@ -214,6 +215,7 @@ export class ErrorManager {
    */
   static async showPortConflict(port: number): Promise<void> {
     await initUI();
+    const isWindows = process.platform === 'win32';
 
     console.error('');
     console.error(
@@ -224,13 +226,19 @@ export class ErrorManager {
     console.error(header('SOLUTIONS'));
     console.error('');
     console.error('  1. Find process using port:');
-    console.error(`     ${color(`lsof -i :${port}`, 'command')}           (macOS/Linux)`);
-    console.error(`     ${color(`netstat -ano | findstr ${port}`, 'command')}  (Windows)`);
+    console.error(`     ${color(getPortCheckCommand(port), 'command')}`);
     console.error('');
     console.error('  2. Kill the process:');
-    console.error(`     ${color(`lsof -ti:${port} | xargs kill -9`, 'command')}`);
+    if (isWindows) {
+      console.error(
+        `     ${color(`taskkill /F /PID <PID>`, 'command')}  (replace <PID> with actual ID)`
+      );
+    } else {
+      console.error(`     ${color(getKillPidCommand(12345).replace('12345', '<PID>'), 'command')}`);
+    }
     console.error('');
-    console.error('  3. Wait and retry (process may exit on its own)');
+    console.error('  3. Auto-fix: Run:');
+    console.error(`     ${color('ccs doctor --fix', 'command')}`);
     console.error('');
   }
 

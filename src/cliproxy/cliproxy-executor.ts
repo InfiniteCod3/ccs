@@ -37,6 +37,8 @@ import {
   renameAccount,
   getDefaultAccount,
 } from './account-manager';
+import { getPortCheckCommand, getCatCommand, killProcessOnPort } from '../utils/platform-commands';
+import { getPortProcess, isCLIProxyProcess } from '../utils/port-utils';
 
 /** Default executor configuration */
 const DEFAULT_CONFIG: ExecutorConfig = {
@@ -283,7 +285,33 @@ export async function execClaudeWithCLIProxy(
   const configPath = generateConfig(provider, cfg.port);
   log(`Config written: ${configPath}`);
 
-  // 6. Spawn CLIProxyAPI binary
+  // 6a. Pre-flight check: ensure port is free (auto-kill zombie CLIProxy)
+  const portProcess = await getPortProcess(cfg.port);
+  if (portProcess) {
+    if (isCLIProxyProcess(portProcess)) {
+      // Zombie CLIProxy from previous run - auto-kill it
+      log(`Found zombie CLIProxy on port ${cfg.port} (PID ${portProcess.pid}), killing...`);
+      const killed = killProcessOnPort(cfg.port, verbose);
+      if (killed) {
+        console.log(info(`Cleaned up zombie CLIProxy process`));
+        // Wait a bit for port to be released
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    } else {
+      // Non-CLIProxy process blocking the port - warn user
+      console.error('');
+      console.error(
+        warn(`Port ${cfg.port} is blocked by ${portProcess.processName} (PID ${portProcess.pid})`)
+      );
+      console.error('');
+      console.error('To fix this, close the blocking application or run:');
+      console.error(`  ${getPortCheckCommand(cfg.port)}`);
+      console.error('');
+      throw new Error(`Port ${cfg.port} is in use by another application`);
+    }
+  }
+
+  // 6b. Spawn CLIProxyAPI binary
   const proxyArgs = ['--config', configPath];
 
   log(`Spawning: ${binaryPath} ${proxyArgs.join(' ')}`);
@@ -308,7 +336,7 @@ export async function execClaudeWithCLIProxy(
     console.error(fail(`CLIProxy spawn error: ${error.message}`));
   });
 
-  // 5. Wait for proxy readiness via TCP polling
+  // 7. Wait for proxy readiness via TCP polling
   const readySpinner = new ProgressIndicator(`Waiting for CLIProxy on port ${cfg.port}`);
   readySpinner.start();
 
@@ -329,9 +357,10 @@ export async function execClaudeWithCLIProxy(
     console.error('  3. Invalid configuration');
     console.error('');
     console.error('Troubleshooting:');
-    console.error(`  - Check if port ${cfg.port} is in use: lsof -i :${cfg.port}`);
+    console.error(`  - Check port: ${getPortCheckCommand(cfg.port)}`);
     console.error('  - Run with --verbose for detailed logs');
-    console.error(`  - Check config: cat ${configPath}`);
+    console.error(`  - View config: ${getCatCommand(configPath)}`);
+    console.error('  - Try: ccs doctor --fix');
     console.error('');
 
     throw new Error(`CLIProxy startup failed: ${err.message}`);

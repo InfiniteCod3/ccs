@@ -43,6 +43,17 @@ export interface DailyUsage {
   modelsUsed: number;
 }
 
+export interface HourlyUsage {
+  hour: string;
+  tokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheTokens: number;
+  cost: number;
+  modelsUsed: number;
+  requests: number;
+}
+
 export interface ModelUsage {
   model: string;
   tokens: number;
@@ -147,6 +158,12 @@ export const usageApi = {
     if (options?.profile) params.append('profile', options.profile);
     return request<DailyUsage[]>(`/usage/daily?${params}`);
   },
+  hourly: (options?: UsageQueryOptions) => {
+    const params = new URLSearchParams();
+    if (options?.startDate) params.append('since', formatDateForApi(options.startDate));
+    if (options?.endDate) params.append('until', formatDateForApi(options.endDate));
+    return request<HourlyUsage[]>(`/usage/hourly?${params}`);
+  },
   models: (options?: UsageQueryOptions) => {
     const params = new URLSearchParams();
     if (options?.startDate) params.append('since', formatDateForApi(options.startDate));
@@ -220,6 +237,14 @@ export function useUsageTrends(options?: UsageQueryOptions) {
   return useQuery({
     queryKey: ['usage', 'trends', options],
     queryFn: () => usageApi.trends(options),
+    staleTime: 60 * 1000, // 1 minute
+  });
+}
+
+export function useHourlyUsage(options?: UsageQueryOptions) {
+  return useQuery({
+    queryKey: ['usage', 'hourly', options],
+    queryFn: () => usageApi.hourly(options),
     staleTime: 60 * 1000, // 1 minute
   });
 }

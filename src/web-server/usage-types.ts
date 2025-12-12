@@ -37,6 +37,20 @@ export interface DailyUsage {
   modelBreakdowns: ModelBreakdown[];
 }
 
+/** Hourly usage aggregation (YYYY-MM-DD HH:00) */
+export interface HourlyUsage {
+  hour: string; // Format: "YYYY-MM-DD HH:00"
+  source: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  cost: number;
+  totalCost: number;
+  modelsUsed: string[];
+  modelBreakdowns: ModelBreakdown[];
+}
+
 /** Monthly usage aggregation (YYYY-MM) */
 export interface MonthlyUsage {
   month: string;

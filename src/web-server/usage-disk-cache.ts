@@ -11,7 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import type { DailyUsage, MonthlyUsage, SessionUsage } from './usage-types';
+import type { DailyUsage, HourlyUsage, MonthlyUsage, SessionUsage } from './usage-types';
 import { ok, info, warn } from '../utils/ui';
 
 // Cache configuration
@@ -26,13 +26,14 @@ export interface UsageDiskCache {
   version: number;
   timestamp: number;
   daily: DailyUsage[];
+  hourly: HourlyUsage[];
   monthly: MonthlyUsage[];
   session: SessionUsage[];
 }
 
 // Current cache version - increment to invalidate old caches
-// v2: Updated model pricing (Opus 4.5: $5/$25, Gemini 3, GLM, Kimi, etc.)
-const CACHE_VERSION = 2;
+// v3: Added hourly data to cache
+const CACHE_VERSION = 3;
 
 /**
  * Ensure ~/.ccs/cache directory exists
@@ -95,6 +96,7 @@ export function isDiskCacheStale(cache: UsageDiskCache | null): boolean {
  */
 export function writeDiskCache(
   daily: DailyUsage[],
+  hourly: HourlyUsage[],
   monthly: MonthlyUsage[],
   session: SessionUsage[]
 ): void {
@@ -105,6 +107,7 @@ export function writeDiskCache(
       version: CACHE_VERSION,
       timestamp: Date.now(),
       daily,
+      hourly,
       monthly,
       session,
     };

@@ -18,13 +18,17 @@ import { useCliproxyStats, useCliproxyStatus } from '@/hooks/use-cliproxy-stats'
 
 interface CliproxyStatsCardProps {
   className?: string;
+  isLoading?: boolean; // External loading state from parent (for synchronized loading UI)
 }
 
-export function CliproxyStatsCard({ className }: CliproxyStatsCardProps) {
+export function CliproxyStatsCard({
+  className,
+  isLoading: externalLoading,
+}: CliproxyStatsCardProps) {
   const { data: status, isLoading: statusLoading } = useCliproxyStatus();
   const { data: stats, isLoading: statsLoading, error } = useCliproxyStats(status?.running);
 
-  const isLoading = statusLoading || (status?.running && statsLoading);
+  const isLoading = externalLoading || statusLoading || (status?.running && statsLoading);
 
   if (isLoading) {
     return (

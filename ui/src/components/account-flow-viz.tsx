@@ -41,34 +41,25 @@ interface ConnectionEvent {
   latencyMs?: number;
 }
 
-/** Generate mock connection events based on account data */
+/** Generate connection events from real account data */
 function generateConnectionEvents(accounts: AccountData[]): ConnectionEvent[] {
   const events: ConnectionEvent[] = [];
-  const now = new Date();
 
   accounts.forEach((account) => {
-    // Generate events based on success/failure counts
-    const successEvents = Math.min(account.successCount, 3);
-    const failEvents = Math.min(account.failureCount, 2);
+    // Only show events for accounts that have actual request data
+    const hasActivity = account.successCount > 0 || account.failureCount > 0;
+    if (!hasActivity) return;
 
-    for (let i = 0; i < successEvents; i++) {
-      events.push({
-        id: `${account.id}-s-${i}`,
-        timestamp: new Date(now.getTime() - Math.random() * 3600000), // Last hour
-        accountEmail: account.email,
-        status: 'success',
-        latencyMs: Math.floor(Math.random() * 500) + 50,
-      });
-    }
+    // Create a single consolidated event per account showing its current status
+    const lastUsed = account.lastUsedAt ? new Date(account.lastUsedAt) : new Date();
+    const hasFailures = account.failureCount > 0;
 
-    for (let i = 0; i < failEvents; i++) {
-      events.push({
-        id: `${account.id}-f-${i}`,
-        timestamp: new Date(now.getTime() - Math.random() * 7200000), // Last 2 hours
-        accountEmail: account.email,
-        status: 'failed',
-      });
-    }
+    events.push({
+      id: `${account.id}-status`,
+      timestamp: lastUsed,
+      accountEmail: account.email,
+      status: hasFailures && account.failureCount > account.successCount ? 'failed' : 'success',
+    });
   });
 
   // Sort by timestamp descending (most recent first)

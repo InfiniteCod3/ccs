@@ -6,6 +6,7 @@
 
 import { useState, useMemo } from 'react';
 import { useCliproxyAuth } from '@/hooks/use-cliproxy';
+import { useCliproxyStats, type AccountUsageStats } from '@/hooks/use-cliproxy-stats';
 import { cn, STATUS_COLORS } from '@/lib/utils';
 import { getProviderDisplayName, PROVIDER_COLORS } from '@/lib/provider-config';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -63,8 +64,15 @@ const ACCOUNT_COLORS = [
 
 export function AuthMonitor() {
   const { data, isLoading, error } = useCliproxyAuth();
+  const { data: statsData, isLoading: statsLoading } = useCliproxyStats();
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [hoveredProvider, setHoveredProvider] = useState<string | null>(null);
+
+  // Build a map of account email -> usage stats from CLIProxy
+  const accountStatsMap = useMemo(() => {
+    if (!statsData?.accountStats) return new Map<string, AccountUsageStats>();
+    return new Map(Object.entries(statsData.accountStats));
+  }, [statsData?.accountStats]);
 
   // Transform auth status data into account rows
   const { accounts, totalSuccess, totalFailure, totalRequests, providerStats } = useMemo(() => {
@@ -96,9 +104,11 @@ export function AuthMonitor() {
       if (!providerData) return;
 
       status.accounts?.forEach((account: OAuthAccount) => {
-        // Mock stats - in production, fetch from CLIProxy /usage endpoint
-        const success = Math.floor(Math.random() * 2000) + 100;
-        const failure = account.isDefault ? Math.floor(Math.random() * 50) : 0;
+        // Get real stats from CLIProxy - try email first, then id
+        const accountEmail = account.email || account.id;
+        const realStats = accountStatsMap.get(accountEmail);
+        const success = realStats?.successCount ?? 0;
+        const failure = realStats?.failureCount ?? 0;
         tSuccess += success;
         tFailure += failure;
         providerData.success += success;
@@ -112,7 +122,7 @@ export function AuthMonitor() {
           isDefault: account.isDefault,
           successCount: success,
           failureCount: failure,
-          lastUsedAt: account.lastUsedAt,
+          lastUsedAt: realStats?.lastUsedAt ?? account.lastUsedAt,
           color: ACCOUNT_COLORS[colorIndex % ACCOUNT_COLORS.length],
         };
         accountsList.push(row);
@@ -144,7 +154,7 @@ export function AuthMonitor() {
       totalRequests: tSuccess + tFailure,
       providerStats: providerStatsArr,
     };
-  }, [data?.authStatus]);
+  }, [data?.authStatus, accountStatsMap]);
 
   const overallSuccessRate =
     totalRequests > 0 ? Math.round((totalSuccess / totalRequests) * 100) : 100;
@@ -154,7 +164,7 @@ export function AuthMonitor() {
     ? providerStats.find((ps) => ps.provider === selectedProvider)
     : null;
 
-  if (isLoading) {
+  if (isLoading || statsLoading) {
     return (
       <div className="rounded-xl border border-border overflow-hidden font-mono text-[13px] bg-card/50 dark:bg-zinc-900/60 backdrop-blur-sm">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">

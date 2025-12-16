@@ -9,7 +9,21 @@ import { cn } from '@/lib/utils';
 import { ProviderIcon } from '@/components/provider-icon';
 import { PROVIDER_COLORS } from '@/lib/provider-config';
 import { STATUS_COLORS } from '@/lib/utils';
-import { ChevronRight, X, CheckCircle2, XCircle, Clock, Activity } from 'lucide-react';
+import {
+  ChevronRight,
+  X,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Activity,
+  GripVertical,
+} from 'lucide-react';
+
+/** Position offset for draggable cards */
+interface DragOffset {
+  x: number;
+  y: number;
+}
 
 interface AccountData {
   id: string;
@@ -203,9 +217,47 @@ export function AccountFlowViz({ providerData, onBack }: AccountFlowVizProps) {
   const [selectedAccount, setSelectedAccount] = useState<AccountData | null>(null);
   const [paths, setPaths] = useState<string[]>([]);
 
+  // Drag state for all cards (account IDs + 'provider')
+  const [dragOffsets, setDragOffsets] = useState<Record<string, DragOffset>>({});
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(
+    null
+  );
+
+  // Pulse state: account IDs that are currently pulsing
+  const [pulsingAccounts, setPulsingAccounts] = useState<Set<string>>(new Set());
+  // Store previous counts to detect changes
+  const [prevCounts, setPrevCounts] = useState<Record<string, number>>({});
+
   const { accounts } = providerData;
   const maxRequests = Math.max(...accounts.map((a) => a.successCount + a.failureCount), 1);
   const totalRequests = accounts.reduce((acc, a) => acc + a.successCount + a.failureCount, 0);
+
+  // Detect new activity and trigger pulse (runs when accounts data changes)
+  useEffect(() => {
+    const newPulsing = new Set<string>();
+    const newCounts: Record<string, number> = {};
+
+    accounts.forEach((account) => {
+      const currentCount = account.successCount + account.failureCount;
+      newCounts[account.id] = currentCount;
+      const prev = prevCounts[account.id] ?? 0;
+
+      if (currentCount > prev && prev > 0) {
+        newPulsing.add(account.id);
+      }
+    });
+
+    setPrevCounts(newCounts);
+
+    if (newPulsing.size > 0) {
+      setPulsingAccounts(newPulsing);
+      // Clear pulse after animation
+      const timer = setTimeout(() => setPulsingAccounts(new Set()), 600);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accounts]);
 
   // Generate connection events for timeline
   const connectionEvents = useMemo(() => generateConnectionEvents(accounts), [accounts]);
@@ -222,10 +274,6 @@ export function AccountFlowViz({ providerData, onBack }: AccountFlowVizProps) {
     if (!destEl) return;
     const destRect = destEl.getBoundingClientRect();
 
-    // Destination point (left center of provider card)
-    const destX = destRect.left - svgRect.left;
-    const destY = destRect.top + destRect.height / 2 - svgRect.top;
-
     const newPaths: string[] = [];
 
     accounts.forEach((_, i) => {
@@ -233,9 +281,24 @@ export function AccountFlowViz({ providerData, onBack }: AccountFlowVizProps) {
       if (!sourceEl) return;
       const sourceRect = sourceEl.getBoundingClientRect();
 
-      // Source point (right center of account card)
-      const startX = sourceRect.right - svgRect.left;
-      const startY = sourceRect.top + sourceRect.height / 2 - svgRect.top;
+      // Determine if this account is on the right side
+      const isRightSide = sourceEl.hasAttribute('data-right-side');
+
+      let startX: number, startY: number, destX: number, destY: number;
+
+      if (isRightSide) {
+        // Right side account: connect from left edge to right edge of provider
+        startX = sourceRect.left - svgRect.left;
+        startY = sourceRect.top + sourceRect.height / 2 - svgRect.top;
+        destX = destRect.right - svgRect.left;
+        destY = destRect.top + destRect.height / 2 - svgRect.top;
+      } else {
+        // Left side account: connect from right edge to left edge of provider
+        startX = sourceRect.right - svgRect.left;
+        startY = sourceRect.top + sourceRect.height / 2 - svgRect.top;
+        destX = destRect.left - svgRect.left;
+        destY = destRect.top + destRect.height / 2 - svgRect.top;
+      }
 
       // Bezier control points
       const cp1X = startX + (destX - startX) * 0.5;
@@ -261,6 +324,60 @@ export function AccountFlowViz({ providerData, onBack }: AccountFlowVizProps) {
 
   const providerColor = PROVIDER_COLORS[providerData.provider.toLowerCase()] || '#6b7280';
 
+  // Split accounts into left and right groups (when > 1 account, balance both sides)
+  const { leftAccounts, rightAccounts } = useMemo(() => {
+    if (accounts.length <= 1) {
+      return { leftAccounts: accounts, rightAccounts: [] };
+    }
+    const mid = Math.ceil(accounts.length / 2);
+    return {
+      leftAccounts: accounts.slice(0, mid),
+      rightAccounts: accounts.slice(mid),
+    };
+  }, [accounts]);
+
+  const hasRightAccounts = rightAccounts.length > 0;
+
+  // Drag handlers
+  const handlePointerDown = useCallback(
+    (id: string, e: React.PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      const offset = dragOffsets[id] || { x: 0, y: 0 };
+      dragStartRef.current = { x: e.clientX, y: e.clientY, offsetX: offset.x, offsetY: offset.y };
+      setDraggingId(id);
+    },
+    [dragOffsets]
+  );
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!draggingId || !dragStartRef.current) return;
+      const start = dragStartRef.current;
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      setDragOffsets((prev) => ({
+        ...prev,
+        [draggingId]: {
+          x: start.offsetX + dx,
+          y: start.offsetY + dy,
+        },
+      }));
+      // Recalculate paths during drag
+      requestAnimationFrame(calculatePaths);
+    },
+    [draggingId, calculatePaths]
+  );
+
+  const handlePointerUp = useCallback(() => {
+    setDraggingId(null);
+    dragStartRef.current = null;
+  }, []);
+
+  // Get offset for a card
+  const getOffset = (id: string): DragOffset => dragOffsets[id] || { x: 0, y: 0 };
+
   return (
     <div className="flex flex-col" ref={containerRef}>
       {/* Back button */}
@@ -274,10 +391,10 @@ export function AccountFlowViz({ providerData, onBack }: AccountFlowVizProps) {
         </button>
       )}
 
-      {/* Main visualization area - 2 column layout: Flow viz (left) | Timeline (right) */}
+      {/* Main visualization area - 3 column layout: Left Accounts | Provider | Right Accounts + Timeline */}
       <div className="min-h-[320px] flex gap-4 px-4 py-6">
-        {/* Left Section: Account → Provider Flow - expands to fill available space */}
-        <div className="relative flex-1 flex items-center justify-between px-8">
+        {/* Flow visualization section */}
+        <div className="relative flex-1 flex items-center justify-between px-4">
           {/* SVG Canvas (Background) */}
           <svg
             ref={svgRef}
@@ -295,47 +412,75 @@ export function AccountFlowViz({ providerData, onBack }: AccountFlowVizProps) {
               const strokeWidth = Math.max(2, (total / maxRequests) * 10);
               const isHovered = hoveredAccount === i;
               const isDimmed = hoveredAccount !== null && hoveredAccount !== i;
+              const isPulsing = pulsingAccounts.has(account.id);
 
               return (
-                <path
-                  key={i}
-                  d={d}
-                  fill="none"
-                  stroke={account.color}
-                  strokeWidth={strokeWidth}
-                  strokeOpacity={isHovered ? 0.9 : isDimmed ? 0.05 : 0.2}
-                  strokeLinecap="round"
-                  filter={isHovered ? 'url(#flow-glow)' : undefined}
-                  className="transition-all duration-300"
-                />
+                <g key={i}>
+                  {/* Base path - static connection line */}
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke={account.color}
+                    strokeWidth={strokeWidth}
+                    strokeOpacity={isHovered ? 0.9 : isDimmed ? 0.05 : 0.2}
+                    strokeLinecap="round"
+                    filter={isHovered ? 'url(#flow-glow)' : undefined}
+                    className="transition-all duration-300"
+                  />
+                  {/* Pulse layer - only shows when new activity detected */}
+                  {isPulsing && (
+                    <path
+                      d={d}
+                      fill="none"
+                      stroke={account.color}
+                      strokeWidth={strokeWidth * 1.5}
+                      strokeLinecap="round"
+                      filter="url(#flow-glow)"
+                      className="animate-request-pulse"
+                    />
+                  )}
+                </g>
               );
             })}
           </svg>
 
-          {/* Source Accounts */}
-          <div className="flex flex-col gap-3 z-10 w-48 justify-center">
-            {accounts.map((account, i) => {
+          {/* Left Accounts */}
+          <div className="flex flex-col gap-3 z-10 w-48 justify-center flex-shrink-0">
+            {leftAccounts.map((account) => {
+              const originalIndex = accounts.findIndex((a) => a.id === account.id);
               const total = account.successCount + account.failureCount;
-              const isHovered = hoveredAccount === i;
+              const isHovered = hoveredAccount === originalIndex;
+              const isDragging = draggingId === account.id;
+              const offset = getOffset(account.id);
 
               return (
                 <div
                   key={account.id}
-                  data-account-index={i}
-                  onClick={() => setSelectedAccount(account)}
-                  onMouseEnter={() => setHoveredAccount(i)}
+                  data-account-index={originalIndex}
+                  onClick={() => !isDragging && setSelectedAccount(account)}
+                  onMouseEnter={() => setHoveredAccount(originalIndex)}
                   onMouseLeave={() => setHoveredAccount(null)}
+                  onPointerDown={(e) => handlePointerDown(account.id, e)}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
                   className={cn(
-                    'group/card relative rounded-lg p-3 pr-6 cursor-pointer transition-all duration-300',
+                    'group/card relative rounded-lg p-3 pr-6 cursor-grab transition-shadow duration-200',
                     'bg-muted/30 dark:bg-zinc-900/60 backdrop-blur-sm',
                     'border border-border/50 dark:border-white/[0.08]',
-                    'border-l-2 hover:translate-x-1',
-                    isHovered && 'bg-muted/50 dark:bg-zinc-800/60'
+                    'border-l-2 select-none touch-none',
+                    isHovered && 'bg-muted/50 dark:bg-zinc-800/60',
+                    isDragging && 'cursor-grabbing shadow-xl scale-105 z-50'
                   )}
-                  style={{ borderLeftColor: account.color }}
+                  style={{
+                    borderLeftColor: account.color,
+                    transform: `translate(${offset.x}px, ${offset.y}px)${isDragging ? ' scale(1.05)' : ''}`,
+                  }}
                 >
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="text-xs font-semibold text-foreground tracking-tight truncate max-w-[120px]">
+                  {/* Drag handle indicator */}
+                  <GripVertical className="absolute top-1/2 left-1 -translate-y-1/2 w-3 h-3 text-muted-foreground/40" />
+                  <div className="flex justify-between items-start mb-1 ml-3">
+                    <span className="text-xs font-semibold text-foreground tracking-tight truncate max-w-[100px]">
                       {cleanEmail(account.email)}
                     </span>
                     <ChevronRight
@@ -356,7 +501,7 @@ export function AccountFlowViz({ providerData, onBack }: AccountFlowVizProps) {
                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/80" />
                     </div>
                   </div>
-                  {/* Connector Dot */}
+                  {/* Connector Dot - Right side */}
                   <div
                     className={cn(
                       'absolute top-1/2 -right-1.5 w-3 h-3 rounded-full transform -translate-y-1/2 z-20 transition-colors border',
@@ -369,64 +514,178 @@ export function AccountFlowViz({ providerData, onBack }: AccountFlowVizProps) {
             })}
           </div>
 
-          {/* Destination Provider */}
-          <div className="z-10 w-48 flex items-center">
-            <div
-              data-provider-node
-              className={cn(
-                'group relative w-full rounded-xl p-4 cursor-pointer transition-all duration-300',
-                'bg-muted/30 dark:bg-zinc-900/60 backdrop-blur-sm',
-                'border border-border/50 dark:border-white/[0.08]',
-                hoveredAccount !== null && 'scale-[1.02]'
-              )}
-              style={{
-                borderColor: hoveredAccount !== null ? `${providerColor}50` : undefined,
-              }}
-            >
-              {/* Connector Point */}
-              <div
-                className="absolute top-1/2 -left-1.5 w-3 h-3 rounded-full transform -translate-y-1/2"
-                style={{
-                  backgroundColor: providerColor,
-                  boxShadow: `0 0 0 4px var(--background)`,
-                }}
-              />
+          {/* Center Provider */}
+          <div className="z-10 w-52 flex items-center flex-shrink-0">
+            {(() => {
+              const isDragging = draggingId === 'provider';
+              const offset = getOffset('provider');
+              return (
+                <div
+                  data-provider-node
+                  onPointerDown={(e) => handlePointerDown('provider', e)}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
+                  className={cn(
+                    'group relative w-full rounded-xl p-4 cursor-grab transition-shadow duration-200',
+                    'bg-muted/30 dark:bg-zinc-900/60 backdrop-blur-sm',
+                    'border-2 border-border/50 dark:border-white/[0.08]',
+                    // Idle animations: float + border glow (disabled when dragging)
+                    !isDragging && 'animate-subtle-float animate-border-glow',
+                    'select-none touch-none',
+                    hoveredAccount !== null && 'scale-[1.02]',
+                    isDragging && 'cursor-grabbing shadow-2xl scale-105 z-50'
+                  )}
+                  style={
+                    {
+                      '--glow-color': `${providerColor}60`,
+                      borderColor: hoveredAccount !== null ? `${providerColor}80` : undefined,
+                      transform: `translate(${offset.x}px, ${offset.y}px)${isDragging ? ' scale(1.05)' : ''}`,
+                    } as React.CSSProperties
+                  }
+                >
+                  {/* Drag handle */}
+                  <GripVertical className="absolute top-2 right-2 w-4 h-4 text-muted-foreground/40" />
 
-              <div className="flex items-center gap-3 mb-4">
-                <ProviderIcon provider={providerData.provider} size={36} withBackground />
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground tracking-tight">
-                    {providerData.displayName}
-                  </h3>
-                  <p className="text-[10px] text-muted-foreground font-medium uppercase">
-                    Provider
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-muted-foreground">Total Requests</span>
-                  <span className="text-foreground font-mono">
-                    {totalRequests.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-muted-foreground">Accounts</span>
-                  <span className="text-foreground font-mono">{accounts.length}</span>
-                </div>
-                <div className="w-full bg-muted dark:bg-zinc-800/50 h-1 rounded-full mt-2 overflow-hidden">
+                  {/* Animated glow background */}
                   <div
-                    className="h-full rounded-full transition-all duration-500"
+                    className="absolute inset-0 rounded-xl animate-glow-pulse pointer-events-none"
+                    style={{ '--glow-color': `${providerColor}30` } as React.CSSProperties}
+                  />
+
+                  {/* Left Connector Point */}
+                  <div
+                    className="absolute top-1/2 -left-1.5 w-3 h-3 rounded-full transform -translate-y-1/2"
                     style={{
-                      width: `${Math.min(100, (totalRequests / (maxRequests * accounts.length)) * 100)}%`,
                       backgroundColor: providerColor,
+                      boxShadow: `0 0 0 4px var(--background)`,
                     }}
                   />
+
+                  {/* Right Connector Point - only show if there are right accounts */}
+                  {hasRightAccounts && (
+                    <div
+                      className="absolute top-1/2 -right-1.5 w-3 h-3 rounded-full transform -translate-y-1/2"
+                      style={{
+                        backgroundColor: providerColor,
+                        boxShadow: `0 0 0 4px var(--background)`,
+                      }}
+                    />
+                  )}
+
+                  <div className="flex items-center gap-3 mb-4 relative z-10">
+                    {/* Provider icon with breathing animation */}
+                    <div className="animate-icon-breathe">
+                      <ProviderIcon provider={providerData.provider} size={36} withBackground />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground tracking-tight">
+                        {providerData.displayName}
+                      </h3>
+                      <p className="text-[10px] text-muted-foreground font-medium uppercase">
+                        Provider
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 relative z-10">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-muted-foreground">Total Requests</span>
+                      <span className="text-foreground font-mono">
+                        {totalRequests.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-muted-foreground">Accounts</span>
+                      <span className="text-foreground font-mono">{accounts.length}</span>
+                    </div>
+                    <div className="w-full bg-muted dark:bg-zinc-800/50 h-1 rounded-full mt-2 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${Math.min(100, (totalRequests / (maxRequests * accounts.length)) * 100)}%`,
+                          backgroundColor: providerColor,
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              );
+            })()}
           </div>
+
+          {/* Right Accounts */}
+          {hasRightAccounts && (
+            <div className="flex flex-col gap-3 z-10 w-44 justify-center">
+              {rightAccounts.map((account) => {
+                const originalIndex = accounts.findIndex((a) => a.id === account.id);
+                const total = account.successCount + account.failureCount;
+                const isHovered = hoveredAccount === originalIndex;
+                const isDragging = draggingId === account.id;
+                const offset = getOffset(account.id);
+
+                return (
+                  <div
+                    key={account.id}
+                    data-account-index={originalIndex}
+                    data-right-side
+                    onClick={() => !isDragging && setSelectedAccount(account)}
+                    onMouseEnter={() => setHoveredAccount(originalIndex)}
+                    onMouseLeave={() => setHoveredAccount(null)}
+                    onPointerDown={(e) => handlePointerDown(account.id, e)}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerCancel={handlePointerUp}
+                    className={cn(
+                      'group/card relative rounded-lg p-3 pl-6 cursor-grab transition-shadow duration-200',
+                      'bg-muted/30 dark:bg-zinc-900/60 backdrop-blur-sm',
+                      'border border-border/50 dark:border-white/[0.08]',
+                      'border-r-2 select-none touch-none',
+                      isHovered && 'bg-muted/50 dark:bg-zinc-800/60',
+                      isDragging && 'cursor-grabbing shadow-xl scale-105 z-50'
+                    )}
+                    style={{
+                      borderRightColor: account.color,
+                      transform: `translate(${offset.x}px, ${offset.y}px)${isDragging ? ' scale(1.05)' : ''}`,
+                    }}
+                  >
+                    {/* Drag handle indicator */}
+                    <GripVertical className="absolute top-1/2 right-1 -translate-y-1/2 w-3 h-3 text-muted-foreground/40" />
+                    <div className="flex justify-between items-start mb-1 mr-3">
+                      <ChevronRight
+                        className={cn(
+                          'w-3.5 h-3.5 text-muted-foreground transition-opacity rotate-180',
+                          isHovered ? 'opacity-100' : 'opacity-0'
+                        )}
+                      />
+                      <span className="text-xs font-semibold text-foreground tracking-tight truncate max-w-[100px]">
+                        {cleanEmail(account.email)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex gap-1">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/80" />
+                        {account.failureCount > 0 && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-red-500/80" />
+                        )}
+                      </div>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {total.toLocaleString()} reqs
+                      </span>
+                    </div>
+                    {/* Connector Dot - Left side */}
+                    <div
+                      className={cn(
+                        'absolute top-1/2 -left-1.5 w-3 h-3 rounded-full transform -translate-y-1/2 z-20 transition-colors border',
+                        'bg-muted dark:bg-zinc-800 border-border dark:border-zinc-600',
+                        isHovered && 'bg-foreground dark:bg-white border-transparent'
+                      )}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Right Section: Connection Timeline - Fixed compact width */}

@@ -85,9 +85,9 @@ export function useCliproxyStats(enabled = true) {
     queryKey: ['cliproxy-stats'],
     queryFn: fetchCliproxyStats,
     enabled,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 5000, // Refresh every 5 seconds for near-real-time updates
     retry: 1,
-    staleTime: 10000, // Consider data stale after 10 seconds
+    staleTime: 3000, // Consider data stale after 3 seconds
   });
 }
 

@@ -4,7 +4,7 @@
  * Uses glass panel aesthetic with hover interactions and glow effects
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useCliproxyAuth } from '@/hooks/use-cliproxy';
 import { useCliproxyStats, type AccountUsageStats } from '@/hooks/use-cliproxy-stats';
 import { cn, STATUS_COLORS } from '@/lib/utils';
@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ProviderIcon } from '@/components/provider-icon';
 import { AccountFlowViz } from '@/components/account-flow-viz';
 import type { AuthStatus, OAuthAccount } from '@/lib/api-client';
-import { Activity, CheckCircle2, XCircle, ChevronRight } from 'lucide-react';
+import { Activity, CheckCircle2, XCircle, ChevronRight, Radio } from 'lucide-react';
 
 interface AccountRow {
   id: string;
@@ -62,11 +62,77 @@ const ACCOUNT_COLORS = [
   '#a78bfa', // Purple
 ];
 
+/** Enhanced live pulse indicator with multi-ring animation */
+function LivePulse() {
+  return (
+    <div className="relative flex items-center justify-center w-5 h-5">
+      {/* Outer ping ring */}
+      <div
+        className="absolute w-4 h-4 rounded-full animate-ping opacity-20"
+        style={{ backgroundColor: STATUS_COLORS.success }}
+      />
+      {/* Middle pulse ring */}
+      <div
+        className="absolute w-3 h-3 rounded-full animate-pulse opacity-40"
+        style={{ backgroundColor: STATUS_COLORS.success }}
+      />
+      {/* Inner solid dot */}
+      <div
+        className="relative w-2 h-2 rounded-full z-10"
+        style={{ backgroundColor: STATUS_COLORS.success }}
+      />
+    </div>
+  );
+}
+
+/** Inline success/failure badge for provider cards */
+function InlineStatsBadge({ success, failure }: { success: number; failure: number }) {
+  if (success === 0 && failure === 0) {
+    return <span className="text-[9px] text-muted-foreground/50 font-mono">no activity</span>;
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex items-center gap-0.5">
+        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+        <span className="text-[10px] font-mono font-medium text-emerald-500">
+          {success.toLocaleString()}
+        </span>
+      </div>
+      {failure > 0 && (
+        <div className="flex items-center gap-0.5">
+          <XCircle className="w-3 h-3 text-red-500" />
+          <span className="text-[10px] font-mono font-medium text-red-500">
+            {failure.toLocaleString()}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AuthMonitor() {
   const { data, isLoading, error } = useCliproxyAuth();
-  const { data: statsData, isLoading: statsLoading } = useCliproxyStats();
+  const { data: statsData, isLoading: statsLoading, dataUpdatedAt } = useCliproxyStats();
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [hoveredProvider, setHoveredProvider] = useState<string | null>(null);
+  const [timeSinceUpdate, setTimeSinceUpdate] = useState('');
+
+  // Live countdown showing time since last data update
+  useEffect(() => {
+    if (!dataUpdatedAt) return;
+    const updateTime = () => {
+      const diff = Math.floor((Date.now() - dataUpdatedAt) / 1000);
+      if (diff < 60) {
+        setTimeSinceUpdate(`${diff}s ago`);
+      } else {
+        setTimeSinceUpdate(`${Math.floor(diff / 60)}m ago`);
+      }
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, [dataUpdatedAt]);
 
   // Build a map of account email -> usage stats from CLIProxy
   const accountStatsMap = useMemo(() => {
@@ -189,18 +255,19 @@ export function AuthMonitor() {
 
   return (
     <div className="rounded-xl border border-border overflow-hidden font-mono text-[13px] text-foreground bg-card/50 dark:bg-zinc-900/60 backdrop-blur-sm">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/30 dark:bg-zinc-900/40">
-        <div className="flex items-center gap-3">
-          <div
-            className="w-2 h-2 rounded-full animate-pulse"
-            style={{ background: STATUS_COLORS.success }}
-          />
-          <span className="text-xs font-medium tracking-tight text-muted-foreground uppercase">
-            Live Stream
-          </span>
+      {/* Enhanced Live Header with gradient glow */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-gradient-to-r from-emerald-500/5 via-transparent to-transparent dark:from-emerald-500/10">
+        <div className="flex items-center gap-2">
+          <LivePulse />
+          <span className="text-xs font-semibold tracking-tight text-foreground">LIVE</span>
+          <span className="text-[10px] text-muted-foreground">Account Monitor</span>
         </div>
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+        <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-1.5">
+            <Radio className="w-3 h-3 animate-pulse" />
+            <span>Updated {timeSinceUpdate || 'now'}</span>
+          </div>
+          <span className="text-muted-foreground/50">|</span>
           <span>{accounts.length} accounts</span>
           <span className="font-mono">{totalRequests.toLocaleString()} req</span>
         </div>
@@ -299,11 +366,10 @@ export function AuthMonitor() {
                     </div>
 
                     <div className="space-y-2">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Requests</span>
-                        <span className="font-mono text-foreground">
-                          {ps.totalRequests.toLocaleString()}
-                        </span>
+                      {/* Inline success/failure stats - immediately visible */}
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground">Stats</span>
+                        <InlineStatsBadge success={ps.successCount} failure={ps.failureCount} />
                       </div>
                       <div className="flex justify-between text-xs">
                         <span className="text-muted-foreground">Success Rate</span>

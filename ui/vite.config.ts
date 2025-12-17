@@ -23,16 +23,31 @@ export default defineConfig({
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           'radix-ui': [
             '@radix-ui/react-alert-dialog',
+            '@radix-ui/react-checkbox',
+            '@radix-ui/react-collapsible',
             '@radix-ui/react-dialog',
             '@radix-ui/react-dropdown-menu',
             '@radix-ui/react-label',
+            '@radix-ui/react-popover',
+            '@radix-ui/react-scroll-area',
+            '@radix-ui/react-select',
             '@radix-ui/react-separator',
             '@radix-ui/react-slot',
+            '@radix-ui/react-switch',
+            '@radix-ui/react-tabs',
             '@radix-ui/react-tooltip',
           ],
           'tanstack': ['@tanstack/react-query', '@tanstack/react-table'],
           'form-utils': ['react-hook-form', '@hookform/resolvers', 'zod'],
           'icons': ['lucide-react'],
+          // Charts - large library, separate chunk
+          'charts': ['recharts'],
+          // Code editor / syntax highlighting
+          'code-highlight': ['prism-react-renderer'],
+          // Notifications
+          'notifications': ['sonner'],
+          // Utilities
+          'utils': ['date-fns', 'clsx', 'class-variance-authority', 'tailwind-merge', 'yaml'],
         },
       },
     },

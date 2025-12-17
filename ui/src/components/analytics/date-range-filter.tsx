@@ -2,16 +2,18 @@
  * Date Range Filter Component
  *
  * Provides date range selection with preset options for analytics.
- * Uses react-day-picker for date selection UI.
+ * Uses react-day-picker for date selection UI within a Popover.
  */
 
 import React from 'react';
-import { format } from 'date-fns';
-import type { DateRange } from 'react-day-picker';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
+import { format, subDays } from 'date-fns';
 import { CalendarIcon } from 'lucide-react';
+import type { DateRange } from 'react-day-picker';
+
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface DateRangeFilterProps {
   value?: DateRange;
@@ -26,70 +28,94 @@ interface DateRangeFilterProps {
 export function DateRangeFilter({
   value,
   onChange,
-  presets = [],
+  presets = [
+    {
+      label: 'Last 7 days',
+      range: {
+        from: subDays(new Date(), 7),
+        to: new Date(),
+      },
+    },
+    {
+      label: 'Last 30 days',
+      range: {
+        from: subDays(new Date(), 30),
+        to: new Date(),
+      },
+    },
+    {
+      label: 'Last 90 days',
+      range: {
+        from: subDays(new Date(), 90),
+        to: new Date(),
+      },
+    },
+  ],
   className,
 }: DateRangeFilterProps) {
-  const handlePresetClick = (range: DateRange) => {
-    onChange(range);
-  };
+  const [isOpen, setIsOpen] = React.useState(false);
 
-  const handleFromChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const from = e.target.value ? new Date(e.target.value) : undefined;
-    onChange({ from, to: value?.to });
-  };
+  // Helper to check if a preset is currently selected
+  const isPresetSelected = (presetRange: DateRange) => {
+    if (!value || !value.from || !value.to || !presetRange.from || !presetRange.to) {
+      return false;
+    }
 
-  const handleToChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const to = e.target.value ? new Date(e.target.value) : undefined;
-    onChange({ from: value?.from, to });
+    // Compare dates (ignoring time components if needed, but day-picker usually returns start of day)
+    // Simple comparison using formatted strings or timestamps
+    return (
+      format(value.from, 'yyyy-MM-dd') === format(presetRange.from, 'yyyy-MM-dd') &&
+      format(value.to, 'yyyy-MM-dd') === format(presetRange.to, 'yyyy-MM-dd')
+    );
   };
 
   return (
-    <div className={cn('flex flex-wrap items-center gap-2', className)}>
-      {/* Preset Buttons */}
-      {presets.map((preset, index) => (
+    <div className={cn('flex items-center gap-2', className)}>
+      {presets.map((preset) => (
         <Button
-          key={index}
-          variant={isSameRange(value, preset.range) ? 'default' : 'outline'}
+          key={preset.label}
+          variant={isPresetSelected(preset.range) ? 'default' : 'outline'}
           size="sm"
-          onClick={() => handlePresetClick(preset.range)}
+          onClick={() => onChange(preset.range)}
         >
           {preset.label}
         </Button>
       ))}
-
-      {/* Custom Date Range Inputs */}
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1">
-          <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-          <Input
-            type="date"
-            value={value?.from ? format(value.from, 'yyyy-MM-dd') : ''}
-            onChange={handleFromChange}
-            placeholder="From"
-            className="w-40"
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            id="date"
+            variant={'outline'}
+            className={cn(
+              'w-auto min-w-[240px] justify-start text-left font-normal',
+              !value && 'text-muted-foreground'
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {value?.from ? (
+              value.to ? (
+                <>
+                  {format(value.from, 'LLL dd, y')} - {format(value.to, 'LLL dd, y')}
+                </>
+              ) : (
+                format(value.from, 'LLL dd, y')
+              )
+            ) : (
+              <span>Pick a date</span>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="end">
+          <Calendar
+            initialFocus
+            mode="range"
+            defaultMonth={value?.from}
+            selected={value}
+            onSelect={onChange}
+            numberOfMonths={2}
           />
-        </div>
-        <span className="text-muted-foreground">to</span>
-        <Input
-          type="date"
-          value={value?.to ? format(value.to, 'yyyy-MM-dd') : ''}
-          onChange={handleToChange}
-          placeholder="To"
-          className="w-40"
-        />
-      </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
-}
-
-// Helper to compare date ranges
-function isSameRange(a?: DateRange, b?: DateRange): boolean {
-  if (!a || !b) return a === b;
-
-  const fromA = a.from?.getTime() ?? 0;
-  const fromB = b.from?.getTime() ?? 0;
-  const toA = a.to?.getTime() ?? 0;
-  const toB = b.to?.getTime() ?? 0;
-
-  return fromA === fromB && toA === toB;
 }

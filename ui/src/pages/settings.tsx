@@ -28,9 +28,14 @@ interface ProviderConfig {
   timeout?: number;
 }
 
+interface OpenCodeProviderConfig extends ProviderConfig {
+  model?: string;
+}
+
 interface WebSearchProvidersConfig {
   gemini?: ProviderConfig;
   grok?: ProviderConfig;
+  opencode?: OpenCodeProviderConfig;
 }
 
 interface WebSearchConfig {
@@ -47,6 +52,7 @@ interface CliStatus {
 interface WebSearchStatus {
   geminiCli: CliStatus;
   grokCli: CliStatus;
+  opencodeCli: CliStatus;
   readiness: {
     status: 'ready' | 'unavailable';
     message: string;
@@ -136,9 +142,10 @@ export function SettingsPage() {
     const providers = config?.providers || {};
     const currentState = providers.gemini?.enabled ?? false;
     const grokState = providers.grok?.enabled ?? false;
+    const opencodeState = providers.opencode?.enabled ?? false;
 
     saveConfig({
-      enabled: !currentState || grokState, // Enable WebSearch if any provider is enabled
+      enabled: !currentState || grokState || opencodeState, // Enable WebSearch if any provider is enabled
       providers: {
         ...providers,
         gemini: {
@@ -192,6 +199,7 @@ export function SettingsPage() {
 
   const isGeminiEnabled = config?.providers?.gemini?.enabled ?? false;
   const isGrokEnabled = config?.providers?.grok?.enabled ?? false;
+  const isOpenCodeEnabled = config?.providers?.opencode?.enabled ?? false;
 
   // Toggle Grok provider
   const toggleGrok = () => {
@@ -199,11 +207,28 @@ export function SettingsPage() {
     const currentState = providers.grok?.enabled ?? false;
 
     saveConfig({
-      enabled: isGeminiEnabled || !currentState, // Enable WebSearch if any provider is enabled
+      enabled: isGeminiEnabled || !currentState || isOpenCodeEnabled, // Enable WebSearch if any provider is enabled
       providers: {
         ...providers,
         grok: {
           ...providers.grok,
+          enabled: !currentState,
+        },
+      },
+    });
+  };
+
+  // Toggle OpenCode provider
+  const toggleOpenCode = () => {
+    const providers = config?.providers || {};
+    const currentState = providers.opencode?.enabled ?? false;
+
+    saveConfig({
+      enabled: isGeminiEnabled || isGrokEnabled || !currentState, // Enable WebSearch if any provider is enabled
+      providers: {
+        ...providers,
+        opencode: {
+          ...providers.opencode,
           enabled: !currentState,
         },
       },
@@ -344,6 +369,72 @@ export function SettingsPage() {
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-sm text-amber-700 dark:text-amber-300 hover:underline inline-flex items-center gap-1"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          View documentation
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* OpenCode CLI Provider */}
+                  <div
+                    className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
+                      isOpenCodeEnabled
+                        ? 'border-primary/50 bg-primary/5'
+                        : 'border-border bg-background'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Terminal
+                        className={`w-5 h-5 ${isOpenCodeEnabled ? 'text-primary' : 'text-muted-foreground'}`}
+                      />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-mono font-medium">opencode</p>
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 font-medium">
+                            FREE
+                          </span>
+                          {status?.opencodeCli?.installed ? (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 font-medium">
+                              installed
+                            </span>
+                          ) : (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 font-medium">
+                              not installed
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          OpenCode (web search via Zen)
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={isOpenCodeEnabled}
+                      onCheckedChange={toggleOpenCode}
+                      disabled={saving || !status?.opencodeCli?.installed}
+                    />
+                  </div>
+
+                  {/* OpenCode Installation hint when not installed */}
+                  {!status?.opencodeCli?.installed && !statusLoading && (
+                    <div className="p-4 rounded-lg border border-purple-200 bg-purple-50 dark:border-purple-900/50 dark:bg-purple-900/20">
+                      <p className="text-sm font-medium text-purple-800 dark:text-purple-200 mb-2">
+                        OpenCode not installed
+                      </p>
+                      <p className="text-sm text-purple-700 dark:text-purple-300 mb-3">
+                        Install globally (FREE tier available):
+                      </p>
+                      <code className="text-sm bg-purple-100 dark:bg-purple-900/40 px-2 py-1 rounded font-mono">
+                        curl -fsSL https://opencode.ai/install | bash
+                      </code>
+                      <div className="mt-3">
+                        <a
+                          href="https://github.com/sst/opencode"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-purple-700 dark:text-purple-300 hover:underline inline-flex items-center gap-1"
                         >
                           <ExternalLink className="w-3 h-3" />
                           View documentation

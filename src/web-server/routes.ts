@@ -62,6 +62,7 @@ import {
   getWebSearchReadiness,
   getGeminiCliStatus,
   getGrokCliStatus,
+  getOpenCodeCliStatus,
 } from '../utils/websearch-manager';
 
 export const apiRoutes = Router();
@@ -1489,6 +1490,20 @@ apiRoutes.put('/websearch', (req: Request, res: Response): void => {
               timeout:
                 providers.grok?.timeout ?? existingConfig.websearch?.providers?.grok?.timeout ?? 55,
             },
+            opencode: {
+              enabled:
+                providers.opencode?.enabled ??
+                existingConfig.websearch?.providers?.opencode?.enabled ??
+                false,
+              model:
+                providers.opencode?.model ??
+                existingConfig.websearch?.providers?.opencode?.model ??
+                'opencode/gpt-5-nano',
+              timeout:
+                providers.opencode?.timeout ??
+                existingConfig.websearch?.providers?.opencode?.timeout ??
+                60,
+            },
           }
         : existingConfig.websearch?.providers,
     };
@@ -1506,12 +1521,13 @@ apiRoutes.put('/websearch', (req: Request, res: Response): void => {
 
 /**
  * GET /api/websearch/status - Get WebSearch status
- * Returns: { geminiCli, grokCli, readiness }
+ * Returns: { geminiCli, grokCli, opencodeCli, readiness }
  */
 apiRoutes.get('/websearch/status', (_req: Request, res: Response): void => {
   try {
     const geminiCli = getGeminiCliStatus();
     const grokCli = getGrokCliStatus();
+    const opencodeCli = getOpenCodeCliStatus();
     const readiness = getWebSearchReadiness();
 
     res.json({
@@ -1524,6 +1540,11 @@ apiRoutes.get('/websearch/status', (_req: Request, res: Response): void => {
         installed: grokCli.installed,
         path: grokCli.path,
         version: grokCli.version,
+      },
+      opencodeCli: {
+        installed: opencodeCli.installed,
+        path: opencodeCli.path,
+        version: opencodeCli.version,
       },
       readiness: {
         status: readiness.readiness,

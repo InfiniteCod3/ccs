@@ -204,12 +204,99 @@ export function clearGrokCliCache(): void {
   grokCliCache = null;
 }
 
+// ========== OpenCode CLI Detection ==========
+
+/**
+ * OpenCode CLI installation status
+ */
+export interface OpenCodeCliStatus {
+  installed: boolean;
+  path: string | null;
+  version: string | null;
+}
+
+// Cache for OpenCode CLI status (per process)
+let opencodeCliCache: OpenCodeCliStatus | null = null;
+
+/**
+ * Check if OpenCode CLI is installed globally
+ *
+ * OpenCode provides built-in web search via opencode/gpt-5-nano model.
+ * Install: curl -fsSL https://opencode.ai/install | bash
+ *
+ * @returns OpenCode CLI status with path and version
+ */
+export function getOpenCodeCliStatus(): OpenCodeCliStatus {
+  // Return cached result if available
+  if (opencodeCliCache) {
+    return opencodeCliCache;
+  }
+
+  const result: OpenCodeCliStatus = {
+    installed: false,
+    path: null,
+    version: null,
+  };
+
+  try {
+    const isWindows = process.platform === 'win32';
+    const whichCmd = isWindows ? 'where opencode' : 'which opencode';
+
+    const pathResult = execSync(whichCmd, {
+      encoding: 'utf8',
+      timeout: 5000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    const opencodePath = pathResult.trim().split('\n')[0]; // First result on Windows
+
+    if (opencodePath) {
+      result.installed = true;
+      result.path = opencodePath;
+
+      // Try to get version
+      try {
+        const versionResult = execSync('opencode --version', {
+          encoding: 'utf8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        result.version = versionResult.trim();
+      } catch {
+        // Version check failed, but CLI is installed
+        result.version = 'unknown';
+      }
+    }
+  } catch {
+    // Command not found - OpenCode CLI not installed
+  }
+
+  // Cache result
+  opencodeCliCache = result;
+  return result;
+}
+
+/**
+ * Check if OpenCode CLI is available (quick boolean check)
+ */
+export function hasOpenCodeCli(): boolean {
+  return getOpenCodeCliStatus().installed;
+}
+
+/**
+ * Clear OpenCode CLI cache (for testing or after installation)
+ */
+export function clearOpenCodeCliCache(): void {
+  opencodeCliCache = null;
+}
+
 /**
  * Clear all CLI caches
  */
 export function clearAllCliCaches(): void {
   geminiCliCache = null;
   grokCliCache = null;
+  opencodeCliCache = null;
 }
 
 // ========== CLI Provider Info ==========
@@ -219,7 +306,7 @@ export function clearAllCliCaches(): void {
  */
 export interface WebSearchCliInfo {
   /** Provider ID */
-  id: 'gemini' | 'grok';
+  id: 'gemini' | 'grok' | 'opencode';
   /** Display name */
   name: string;
   /** CLI command name */
@@ -248,6 +335,7 @@ export interface WebSearchCliInfo {
 export function getWebSearchCliProviders(): WebSearchCliInfo[] {
   const geminiStatus = getGeminiCliStatus();
   const grokStatus = getGrokCliStatus();
+  const opencodeStatus = getOpenCodeCliStatus();
 
   return [
     {
@@ -260,6 +348,18 @@ export function getWebSearchCliProviders(): WebSearchCliInfo[] {
       docsUrl: 'https://github.com/google-gemini/gemini-cli',
       requiresApiKey: false,
       description: 'Google Gemini with web search (FREE tier: 1000 req/day)',
+      freeTier: true,
+    },
+    {
+      id: 'opencode',
+      name: 'OpenCode',
+      command: 'opencode',
+      installed: opencodeStatus.installed,
+      version: opencodeStatus.version,
+      installCommand: 'curl -fsSL https://opencode.ai/install | bash',
+      docsUrl: 'https://github.com/sst/opencode',
+      requiresApiKey: false,
+      description: 'OpenCode with built-in web search (FREE via Zen)',
       freeTier: true,
     },
     {
@@ -282,7 +382,7 @@ export function getWebSearchCliProviders(): WebSearchCliInfo[] {
  * Check if any WebSearch CLI is available
  */
 export function hasAnyWebSearchCli(): boolean {
-  return hasGeminiCli() || hasGrokCli();
+  return hasGeminiCli() || hasGrokCli() || hasOpenCodeCli();
 }
 
 /**
@@ -296,6 +396,7 @@ export function getCliInstallHints(): string[] {
   return [
     '[i] WebSearch: No CLI tools installed',
     '    Gemini CLI (FREE): npm i -g @google/gemini-cli',
+    '    OpenCode (FREE):   curl -fsSL https://opencode.ai/install | bash',
     '    Grok CLI (paid):   npm i -g @vibe-kit/grok-cli',
   ];
 }
@@ -520,6 +621,7 @@ export interface WebSearchStatus {
   readiness: WebSearchReadiness;
   geminiCli: boolean;
   grokCli: boolean;
+  opencodeCli: boolean;
   message: string;
 }
 
@@ -537,38 +639,29 @@ export function getWebSearchReadiness(): WebSearchStatus {
       readiness: 'unavailable',
       geminiCli: false,
       grokCli: false,
+      opencodeCli: false,
       message: 'Disabled in config',
     };
   }
 
-  // Check both CLIs
+  // Check all CLIs
   const geminiInstalled = hasGeminiCli();
   const grokInstalled = hasGrokCli();
+  const opencodeInstalled = hasOpenCodeCli();
 
-  if (geminiInstalled && grokInstalled) {
+  // Build message based on installed CLIs
+  const installedClis: string[] = [];
+  if (geminiInstalled) installedClis.push('Gemini');
+  if (grokInstalled) installedClis.push('Grok');
+  if (opencodeInstalled) installedClis.push('OpenCode');
+
+  if (installedClis.length > 0) {
     return {
       readiness: 'ready',
-      geminiCli: true,
-      grokCli: true,
-      message: 'Ready (Gemini + Grok CLI)',
-    };
-  }
-
-  if (geminiInstalled) {
-    return {
-      readiness: 'ready',
-      geminiCli: true,
-      grokCli: false,
-      message: 'Ready (Gemini CLI)',
-    };
-  }
-
-  if (grokInstalled) {
-    return {
-      readiness: 'ready',
-      geminiCli: false,
-      grokCli: true,
-      message: 'Ready (Grok CLI)',
+      geminiCli: geminiInstalled,
+      grokCli: grokInstalled,
+      opencodeCli: opencodeInstalled,
+      message: `Ready (${installedClis.join(' + ')})`,
     };
   }
 
@@ -576,6 +669,7 @@ export function getWebSearchReadiness(): WebSearchStatus {
     readiness: 'unavailable',
     geminiCli: false,
     grokCli: false,
+    opencodeCli: false,
     message: 'Install: npm i -g @google/gemini-cli',
   };
 }

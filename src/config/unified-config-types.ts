@@ -122,19 +122,33 @@ export interface GrokWebSearchConfig {
 }
 
 /**
+ * OpenCode CLI WebSearch configuration.
+ */
+export interface OpenCodeWebSearchConfig {
+  /** Enable OpenCode CLI for WebSearch (default: false) */
+  enabled?: boolean;
+  /** Model to use (default: opencode/gpt-5-nano) */
+  model?: string;
+  /** Timeout in seconds (default: 60) */
+  timeout?: number;
+}
+
+/**
  * WebSearch providers configuration.
- * Currently supports Gemini CLI and Grok CLI.
+ * Supports Gemini CLI, Grok CLI, and OpenCode.
  */
 export interface WebSearchProvidersConfig {
   /** Gemini CLI - uses google_web_search tool (FREE tier: 1000 req/day) */
   gemini?: GeminiWebSearchConfig;
   /** Grok CLI - xAI web search (requires GROK_API_KEY) */
   grok?: GrokWebSearchConfig;
+  /** OpenCode - built-in web search (FREE via OpenCode Zen) */
+  opencode?: OpenCodeWebSearchConfig;
 }
 
 /**
  * WebSearch configuration.
- * Uses CLI tools (Gemini CLI, Grok CLI) to provide WebSearch for third-party profiles.
+ * Uses CLI tools (Gemini CLI, Grok CLI, OpenCode) for third-party profiles.
  * Third-party providers don't have server-side WebSearch access.
  */
 export interface WebSearchConfig {

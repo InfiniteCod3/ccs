@@ -267,8 +267,10 @@ function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push('# Third-party providers (gemini, codex, agy, etc.) do not have access to');
     lines.push("# Anthropic's WebSearch tool. These CLI tools provide fallback web search.");
     lines.push('#');
+    lines.push('# Fallback chain: Gemini -> OpenCode -> Grok (tries in order until success)');
     lines.push('# providers:');
     lines.push('#   gemini: Gemini CLI (FREE) - npm i -g @google/gemini-cli');
+    lines.push('#   opencode: OpenCode (FREE) - curl -fsSL https://opencode.ai/install | bash');
     lines.push('#   grok: Grok CLI (paid) - npm i -g @vibe-kit/grok-cli (needs GROK_API_KEY)');
     lines.push('#');
     lines.push('# enabled: Master switch - auto-disables when no providers enabled');

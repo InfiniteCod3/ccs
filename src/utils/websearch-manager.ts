@@ -528,15 +528,27 @@ function ensureHookConfig(): boolean {
 
     // Check if WebSearch hook already configured
     const hooks = settings.hooks as Record<string, unknown[]> | undefined;
+    const expectedHookPath = path.join(CCS_HOOKS_DIR, WEBSEARCH_HOOK);
+    const expectedCommand = `node "${expectedHookPath}"`;
+
     if (hooks?.PreToolUse) {
-      const hasWebSearchHook = hooks.PreToolUse.some((h: unknown) => {
+      const webSearchHookIndex = hooks.PreToolUse.findIndex((h: unknown) => {
         const hook = h as Record<string, unknown>;
         return hook.matcher === 'WebSearch';
       });
 
-      if (hasWebSearchHook) {
-        if (process.env.CCS_DEBUG) {
-          console.error(info('WebSearch hook already configured in settings.json'));
+      if (webSearchHookIndex !== -1) {
+        // Hook exists - check if it needs updating (different command path)
+        const existingHook = hooks.PreToolUse[webSearchHookIndex] as Record<string, unknown>;
+        const existingHooks = existingHook.hooks as Array<Record<string, unknown>>;
+
+        if (existingHooks?.[0]?.command !== expectedCommand) {
+          // Update the hook command to point to new file
+          existingHooks[0].command = expectedCommand;
+          fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2), 'utf8');
+          if (process.env.CCS_DEBUG) {
+            console.error(info('Updated WebSearch hook command in settings.json'));
+          }
         }
         return true;
       }

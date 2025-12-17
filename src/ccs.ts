@@ -18,7 +18,8 @@ import {
   ensureMcpWebSearch,
   installWebSearchHook,
   displayWebSearchStatus,
-} from './utils/mcp-manager';
+  getWebSearchHookEnv,
+} from './utils/websearch-manager';
 
 // Import extracted command handlers
 import { handleVersionCommand } from './commands/version-command';
@@ -152,7 +153,8 @@ async function execClaudeWithProxy(
 
   const isWindows = process.platform === 'win32';
   const needsShell = isWindows && /\.(cmd|bat|ps1)$/i.test(claudeCli);
-  const env = { ...process.env, ...envVars };
+  const webSearchEnv = getWebSearchHookEnv();
+  const env = { ...process.env, ...envVars, ...webSearchEnv };
 
   let claude: ChildProcess;
   if (needsShell) {

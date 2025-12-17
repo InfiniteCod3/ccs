@@ -12,8 +12,9 @@
 /**
  * Unified config version.
  * Version 2 = YAML unified format
+ * Version 3 = WebSearch config comments update
  */
-export const UNIFIED_CONFIG_VERSION = 2;
+export const UNIFIED_CONFIG_VERSION = 3;
 
 /**
  * Account configuration (formerly in profiles.json).
@@ -101,55 +102,56 @@ export interface PreferencesConfig {
 }
 
 /**
- * Custom MCP server configuration for BYOM (Bring Your Own MCP)
+ * Gemini CLI WebSearch configuration.
  */
-export interface CustomMcpConfig {
-  /** Unique name for this MCP server */
-  name: string;
-  /** Server type: HTTP endpoint or stdio command */
-  type: 'http' | 'stdio';
-  /** URL for HTTP-based MCP servers */
-  url?: string;
-  /** Headers for HTTP requests */
-  headers?: Record<string, string>;
-  /** Command for stdio-based MCP servers */
-  command?: string;
-  /** Arguments for stdio command */
-  args?: string[];
-  /** Environment variables for the server */
-  env?: Record<string, string>;
+export interface GeminiWebSearchConfig {
+  /** Enable Gemini CLI for WebSearch (default: true) */
+  enabled?: boolean;
+  /** Timeout in seconds (default: 55) */
+  timeout?: number;
+}
+
+/**
+ * WebSearch providers configuration.
+ * Currently supports Gemini CLI only.
+ * Future: opencode, grok-cli, etc.
+ */
+export interface WebSearchProvidersConfig {
+  /** Gemini CLI - uses google_web_search tool */
+  gemini?: GeminiWebSearchConfig;
+  // Future CLI tools can be added here:
+  // opencode?: { enabled?: boolean; model?: string; };
+  // grok?: { enabled?: boolean; };
 }
 
 /**
  * WebSearch configuration.
- * Controls MCP web-search auto-configuration for third-party profiles.
+ * Uses CLI tools (Gemini CLI) to provide WebSearch for third-party profiles.
+ * Third-party providers don't have server-side WebSearch access.
  */
 export interface WebSearchConfig {
-  /** Enable auto-configuration of MCP web-search (default: true) */
+  /** Master switch - enable/disable WebSearch (default: true) */
   enabled?: boolean;
-  /** Preferred provider: auto uses fallback chain, or specify one */
-  provider?: 'auto' | 'web-search-prime' | 'brave' | 'tavily';
-  /** Enable fallback chain when preferred provider fails (default: true) */
-  fallback?: boolean;
-  /** Custom URL for web-search-prime provider (optional, overrides default) */
-  webSearchPrimeUrl?: string;
-  /**
-   * Gemini CLI configuration for WebSearch transformation.
-   * Uses `gemini -p` with google_web_search tool as primary method.
-   * No API key needed - uses OAuth authentication.
-   */
+  /** Individual provider configurations */
+  providers?: WebSearchProvidersConfig;
+  // Legacy fields (deprecated, kept for backwards compatibility)
+  /** @deprecated Use providers.gemini instead */
   gemini?: {
-    /** Enable Gemini CLI for WebSearch (default: true) */
     enabled?: boolean;
-    /** Timeout in seconds for Gemini CLI (default: 55) */
     timeout?: number;
   };
-  /** Search mode: sequential (default) or parallel */
+  /** @deprecated Unused */
   mode?: 'sequential' | 'parallel';
-  /** Selected providers for parallel mode */
+  /** @deprecated Unused */
+  provider?: 'auto' | 'web-search-prime' | 'brave' | 'tavily';
+  /** @deprecated Unused */
+  fallback?: boolean;
+  /** @deprecated Unused */
+  webSearchPrimeUrl?: string;
+  /** @deprecated Unused */
   selectedProviders?: string[];
-  /** Custom MCP servers (BYOM - Bring Your Own MCP) */
-  customMcp?: CustomMcpConfig[];
+  /** @deprecated Unused */
+  customMcp?: unknown[];
 }
 
 /**
@@ -210,11 +212,11 @@ export function createEmptyUnifiedConfig(): UnifiedConfig {
     },
     websearch: {
       enabled: true,
-      provider: 'auto',
-      fallback: true,
-      gemini: {
-        enabled: true,
-        timeout: 55,
+      providers: {
+        gemini: {
+          enabled: true,
+          timeout: 55,
+        },
       },
     },
   };

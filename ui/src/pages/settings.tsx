@@ -1,6 +1,6 @@
 /**
  * Settings Page - WebSearch Configuration
- * Simplified toggle-based UI: enable providers you want, we handle the rest
+ * Supports Gemini CLI and Grok CLI providers
  */
 
 import { useState, useEffect } from 'react';
@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import {
   Globe,
   RefreshCw,
@@ -18,86 +17,41 @@ import {
   FileCode,
   Copy,
   Check,
-  Plus,
-  Trash2,
   GripVertical,
-  Zap,
   Terminal,
-  Server,
+  ExternalLink,
 } from 'lucide-react';
 import { CodeEditor } from '@/components/code-editor';
 
-interface CustomMcpConfig {
-  name: string;
-  type: 'http' | 'stdio';
-  url?: string;
-  headers?: Record<string, string>;
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>;
+interface ProviderConfig {
+  enabled?: boolean;
+  timeout?: number;
+}
+
+interface WebSearchProvidersConfig {
+  gemini?: ProviderConfig;
+  grok?: ProviderConfig;
 }
 
 interface WebSearchConfig {
   enabled: boolean;
-  provider: 'auto' | 'web-search-prime' | 'brave' | 'tavily';
-  fallback: boolean;
-  gemini?: {
-    enabled: boolean;
-    timeout: number;
-  };
-  mode?: 'sequential' | 'parallel';
-  selectedProviders?: string[];
-  customMcp?: CustomMcpConfig[];
+  providers?: WebSearchProvidersConfig;
+}
+
+interface CliStatus {
+  installed: boolean;
+  path: string | null;
+  version: string | null;
 }
 
 interface WebSearchStatus {
-  geminiCli: {
-    installed: boolean;
-    path: string | null;
-    version: string | null;
-  };
-  mcpServers: {
-    configured: boolean;
-    ccsManaged: string[];
-    userAdded: string[];
-  };
+  geminiCli: CliStatus;
+  grokCli: CliStatus;
   readiness: {
-    status: 'ready' | 'mcp-only' | 'unavailable';
+    status: 'ready' | 'unavailable';
     message: string;
   };
 }
-
-// Built-in providers with code names
-const BUILTIN_PROVIDERS = [
-  {
-    id: 'gemini',
-    name: 'gemini',
-    desc: 'Google Gemini CLI (OAuth)',
-    icon: Terminal,
-    isMcp: false,
-  },
-  {
-    id: 'web-search-prime',
-    name: 'web-search-prime',
-    desc: 'z.ai MCP',
-    icon: Zap,
-    isMcp: true,
-  },
-  {
-    id: 'brave-search',
-    name: 'brave-search',
-    desc: 'Brave Search MCP',
-    icon: Globe,
-    isMcp: true,
-  },
-  {
-    id: 'tavily',
-    name: 'tavily',
-    desc: 'Tavily MCP',
-    icon: Globe,
-    isMcp: true,
-  },
-];
 
 export function SettingsPage() {
   const [config, setConfig] = useState<WebSearchConfig | null>(null);
@@ -111,10 +65,6 @@ export function SettingsPage() {
   const [rawConfig, setRawConfig] = useState<string | null>(null);
   const [rawConfigLoading, setRawConfigLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  // BYOM MCP form state - JSON paste
-  const [mcpJsonInput, setMcpJsonInput] = useState('');
-  const [mcpJsonError, setMcpJsonError] = useState<string | null>(null);
-  const [showAddMcp, setShowAddMcp] = useState(false);
 
   // Load config and status on mount
   useEffect(() => {
@@ -181,173 +131,21 @@ export function SettingsPage() {
     }
   };
 
-  // Get active providers from config
-  const getActiveProviders = (): string[] => {
-    const active: string[] = [];
-    if (config?.gemini?.enabled !== false) active.push('gemini');
-    if (config?.selectedProviders) {
-      active.push(...config.selectedProviders.filter((p) => p !== 'gemini'));
-    }
-    return active;
-  };
-
-  // Toggle a provider
-  const toggleProvider = (providerId: string) => {
-    const current = getActiveProviders();
-    let updated: string[];
-
-    if (current.includes(providerId)) {
-      updated = current.filter((p) => p !== providerId);
-    } else {
-      updated = [...current, providerId];
-    }
-
-    // Separate gemini from MCP providers
-    const geminiEnabled = updated.includes('gemini');
-    const mcpProviders = updated.filter((p) => p !== 'gemini');
-
-    // Determine mode: parallel if multiple providers, sequential otherwise
-    const mode = updated.length > 1 ? 'parallel' : 'sequential';
+  // Toggle Gemini provider
+  const toggleGemini = () => {
+    const providers = config?.providers || {};
+    const currentState = providers.gemini?.enabled ?? false;
+    const grokState = providers.grok?.enabled ?? false;
 
     saveConfig({
-      gemini: {
-        enabled: geminiEnabled,
-        timeout: config?.gemini?.timeout ?? 55,
+      enabled: !currentState || grokState, // Enable WebSearch if any provider is enabled
+      providers: {
+        ...providers,
+        gemini: {
+          ...providers.gemini,
+          enabled: !currentState,
+        },
       },
-      selectedProviders: updated,
-      mode,
-      // Auto-enable if any provider is on
-      enabled: updated.length > 0,
-      // Set primary provider
-      provider: (mcpProviders[0] as WebSearchConfig['provider']) || 'auto',
-    });
-  };
-
-  // Parse JSON input and add custom MCP
-  const addCustomMcp = () => {
-    if (!mcpJsonInput.trim()) return;
-    setMcpJsonError(null);
-
-    // Try to parse JSON
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(mcpJsonInput);
-    } catch (_err) {
-      // Check for common JSON issues
-      const input = mcpJsonInput.trim();
-      if (input.includes('//')) {
-        setMcpJsonError('Remove comments (// ...) from JSON before pasting');
-      } else if (!input.startsWith('{')) {
-        setMcpJsonError('JSON must start with { - check for extra characters');
-      } else if (!input.endsWith('}')) {
-        setMcpJsonError('JSON must end with } - check for missing closing brace');
-      } else {
-        setMcpJsonError('Invalid JSON syntax. Check for missing quotes, commas, or braces.');
-      }
-      return;
-    }
-
-    // Validate it's an object
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      setMcpJsonError('Expected a JSON object { ... }, not an array or primitive');
-      return;
-    }
-
-    const obj = parsed as Record<string, unknown>;
-    const serversToAdd: CustomMcpConfig[] = [];
-
-    // Format 1: { "mcpServers": { "name": { ... } } } - Full Claude/CCS format
-    if (obj.mcpServers && typeof obj.mcpServers === 'object') {
-      for (const [name, serverConfig] of Object.entries(
-        obj.mcpServers as Record<string, unknown>
-      )) {
-        const cfg = serverConfig as Record<string, unknown>;
-        if (cfg && typeof cfg === 'object') {
-          serversToAdd.push({
-            name,
-            type: (cfg.type as 'http' | 'stdio') || 'http',
-            url: cfg.url as string,
-            headers: cfg.headers as Record<string, string>,
-            command: cfg.command as string,
-            args: cfg.args as string[],
-            env: cfg.env as Record<string, string>,
-          });
-        }
-      }
-    }
-    // Format 2: { "type": "http", "url": "..." } - Single server without name
-    else if (obj.type && (obj.url || obj.command)) {
-      setMcpJsonError(
-        'Missing server name. Use format:\n{ "your-server-name": { "type": "http", "url": "..." } }'
-      );
-      return;
-    }
-    // Format 3: { "name": { ... } } - Direct server object (partial paste)
-    else {
-      for (const [name, value] of Object.entries(obj)) {
-        const cfg = value as Record<string, unknown>;
-        if (cfg && typeof cfg === 'object' && !Array.isArray(cfg)) {
-          // Check if this looks like a server config
-          if (cfg.type || cfg.url || cfg.command) {
-            serversToAdd.push({
-              name,
-              type: (cfg.type as 'http' | 'stdio') || 'http',
-              url: cfg.url as string,
-              headers: cfg.headers as Record<string, string>,
-              command: cfg.command as string,
-              args: cfg.args as string[],
-              env: cfg.env as Record<string, string>,
-            });
-          }
-        }
-      }
-    }
-
-    // Validate we found servers
-    if (serversToAdd.length === 0) {
-      setMcpJsonError(
-        'No valid MCP server found. Expected format:\n{ "server-name": { "type": "http", "url": "..." } }'
-      );
-      return;
-    }
-
-    // Validate each server
-    for (const server of serversToAdd) {
-      if (!server.name) {
-        setMcpJsonError('Server name is required');
-        return;
-      }
-      if (server.type === 'http' && !server.url) {
-        setMcpJsonError(`"${server.name}" is missing "url" field`);
-        return;
-      }
-      if (server.type === 'stdio' && !server.command) {
-        setMcpJsonError(`"${server.name}" is missing "command" field`);
-        return;
-      }
-    }
-
-    // Check for duplicates
-    const existing = config?.customMcp || [];
-    const duplicates = serversToAdd.filter((s) => existing.some((e) => e.name === s.name));
-    if (duplicates.length > 0) {
-      setMcpJsonError(`Server "${duplicates[0].name}" already exists`);
-      return;
-    }
-
-    // Success - add the servers
-    saveConfig({ customMcp: [...existing, ...serversToAdd] });
-    setMcpJsonInput('');
-    setShowAddMcp(false);
-  };
-
-  const removeCustomMcp = (name: string) => {
-    const current = config?.customMcp || [];
-    // Also remove from selectedProviders
-    const selected = config?.selectedProviders || [];
-    saveConfig({
-      customMcp: current.filter((m) => m.name !== name),
-      selectedProviders: selected.filter((p) => p !== name),
     });
   };
 
@@ -392,8 +190,25 @@ export function SettingsPage() {
     }
   };
 
-  const activeProviders = config ? getActiveProviders() : [];
-  const activeCount = activeProviders.length;
+  const isGeminiEnabled = config?.providers?.gemini?.enabled ?? false;
+  const isGrokEnabled = config?.providers?.grok?.enabled ?? false;
+
+  // Toggle Grok provider
+  const toggleGrok = () => {
+    const providers = config?.providers || {};
+    const currentState = providers.grok?.enabled ?? false;
+
+    saveConfig({
+      enabled: isGeminiEnabled || !currentState, // Enable WebSearch if any provider is enabled
+      providers: {
+        ...providers,
+        grok: {
+          ...providers.grok,
+          enabled: !currentState,
+        },
+      },
+    });
+  };
 
   if (loading) {
     return (
@@ -419,7 +234,7 @@ export function SettingsPage() {
                 <div>
                   <h1 className="text-lg font-semibold">WebSearch</h1>
                   <p className="text-sm text-muted-foreground">
-                    Toggle providers • Multiple = parallel
+                    CLI-based web search for third-party profiles
                   </p>
                 </div>
               </div>
@@ -454,9 +269,7 @@ export function SettingsPage() {
                 <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                   <div>
                     <p className="font-medium">
-                      {activeCount === 0 && 'No providers enabled'}
-                      {activeCount === 1 && '1 provider active'}
-                      {activeCount > 1 && `${activeCount} providers (parallel)`}
+                      {isGeminiEnabled ? 'WebSearch enabled' : 'WebSearch disabled'}
                     </p>
                     {statusLoading ? (
                       <p className="text-sm text-muted-foreground">Checking status...</p>
@@ -469,180 +282,139 @@ export function SettingsPage() {
                   </Button>
                 </div>
 
-                {/* Built-in Providers */}
+                {/* CLI Providers */}
                 <div className="space-y-3">
                   <h3 className="text-base font-medium">Providers</h3>
-                  <div className="space-y-2">
-                    {BUILTIN_PROVIDERS.map((provider) => {
-                      const isActive = activeProviders.includes(provider.id);
-                      const Icon = provider.icon;
-                      const isGemini = provider.id === 'gemini';
-                      const isInstalled = isGemini
-                        ? status?.geminiCli.installed
-                        : provider.isMcp
-                          ? status?.mcpServers.ccsManaged.includes(provider.id) ||
-                            status?.mcpServers.userAdded.includes(provider.id)
-                          : true;
 
-                      return (
-                        <div
-                          key={provider.id}
-                          className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
-                            isActive
-                              ? 'border-primary/50 bg-primary/5'
-                              : 'border-border bg-background'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Icon
-                              className={`w-5 h-5 ${isActive ? 'text-primary' : 'text-muted-foreground'}`}
-                            />
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="font-mono font-medium">{provider.name}</p>
-                                {isInstalled ? (
-                                  <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 font-medium">
-                                    configured
-                                  </span>
-                                ) : (
-                                  <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 font-medium">
-                                    not configured
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-sm text-muted-foreground">{provider.desc}</p>
-                            </div>
-                          </div>
-                          <Switch
-                            checked={isActive}
-                            onCheckedChange={() => toggleProvider(provider.id)}
-                            disabled={saving || !isInstalled}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Custom MCPs */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-base font-medium">Custom MCPs</h3>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowAddMcp(!showAddMcp)}
-                      disabled={saving}
-                    >
-                      <Plus className="w-4 h-4 mr-1" />
-                      Add
-                    </Button>
-                  </div>
-
-                  {showAddMcp && (
-                    <div className="space-y-3 p-4 rounded-lg border bg-background">
+                  {/* Gemini CLI Provider */}
+                  <div
+                    className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
+                      isGeminiEnabled
+                        ? 'border-primary/50 bg-primary/5'
+                        : 'border-border bg-background'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Terminal
+                        className={`w-5 h-5 ${isGeminiEnabled ? 'text-primary' : 'text-muted-foreground'}`}
+                      />
                       <div>
-                        <Label htmlFor="mcpJson" className="text-sm font-medium">
-                          Paste MCP Server JSON
-                        </Label>
-                        <p className="text-xs text-muted-foreground mt-1 mb-2">
-                          Paste the JSON config from your MCP provider docs
+                        <div className="flex items-center gap-2">
+                          <p className="font-mono font-medium">gemini</p>
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 font-medium">
+                            FREE
+                          </span>
+                          {status?.geminiCli?.installed ? (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 font-medium">
+                              installed
+                            </span>
+                          ) : (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 font-medium">
+                              not installed
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Google Gemini CLI (1000 req/day free)
                         </p>
-                        <textarea
-                          id="mcpJson"
-                          placeholder={`// Full format (from Claude settings):
-{
-  "mcpServers": {
-    "my-mcp": {
-      "type": "http",
-      "url": "https://api.example.com/mcp"
-    }
-  }
-}
-
-// Or just the server part:
-{
-  "my-mcp": {
-    "type": "http",
-    "url": "https://..."
-  }
-}`}
-                          value={mcpJsonInput}
-                          onChange={(e) => {
-                            setMcpJsonInput(e.target.value);
-                            setMcpJsonError(null);
-                          }}
-                          className="w-full min-h-[160px] max-h-[400px] p-3 font-mono text-sm border rounded-md bg-muted/50 resize-y focus:outline-none focus:ring-2 focus:ring-primary"
-                        />
-                        {mcpJsonError && (
-                          <p className="text-sm text-destructive mt-2">{mcpJsonError}</p>
-                        )}
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          onClick={addCustomMcp}
-                          disabled={!mcpJsonInput.trim() || saving}
+                    </div>
+                    <Switch
+                      checked={isGeminiEnabled}
+                      onCheckedChange={toggleGemini}
+                      disabled={saving || !status?.geminiCli?.installed}
+                    />
+                  </div>
+
+                  {/* Gemini Installation hint when not installed */}
+                  {!status?.geminiCli?.installed && !statusLoading && (
+                    <div className="p-4 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-900/20">
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-2">
+                        Gemini CLI not installed
+                      </p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
+                        Install globally (FREE tier available):
+                      </p>
+                      <code className="text-sm bg-amber-100 dark:bg-amber-900/40 px-2 py-1 rounded font-mono">
+                        npm install -g @google/gemini-cli
+                      </code>
+                      <div className="mt-3">
+                        <a
+                          href="https://github.com/google-gemini/gemini-cli"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-amber-700 dark:text-amber-300 hover:underline inline-flex items-center gap-1"
                         >
-                          Add
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setShowAddMcp(false);
-                            setMcpJsonInput('');
-                            setMcpJsonError(null);
-                          }}
-                        >
-                          Cancel
-                        </Button>
+                          <ExternalLink className="w-3 h-3" />
+                          View documentation
+                        </a>
                       </div>
                     </div>
                   )}
 
-                  {/* Custom MCP list */}
-                  {config?.customMcp && config.customMcp.length > 0 && (
-                    <div className="space-y-2">
-                      {config.customMcp.map((mcp) => {
-                        const isActive = activeProviders.includes(mcp.name);
-                        return (
-                          <div
-                            key={mcp.name}
-                            className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
-                              isActive
-                                ? 'border-primary/50 bg-primary/5'
-                                : 'border-border bg-background'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                              <Server
-                                className={`w-5 h-5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`}
-                              />
-                              <div className="min-w-0 flex-1">
-                                <p className="font-mono font-medium truncate">{mcp.name}</p>
-                                <p className="text-sm text-muted-foreground truncate">{mcp.url}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <Switch
-                                checked={isActive}
-                                onCheckedChange={() => toggleProvider(mcp.name)}
-                                disabled={saving}
-                              />
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeCustomMcp(mcp.name)}
-                                disabled={saving}
-                                className="h-8 w-8 p-0"
-                              >
-                                <Trash2 className="w-4 h-4 text-destructive" />
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })}
+                  {/* Grok CLI Provider */}
+                  <div
+                    className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
+                      isGrokEnabled
+                        ? 'border-primary/50 bg-primary/5'
+                        : 'border-border bg-background'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Terminal
+                        className={`w-5 h-5 ${isGrokEnabled ? 'text-primary' : 'text-muted-foreground'}`}
+                      />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-mono font-medium">grok</p>
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 font-medium">
+                            XAI_API_KEY
+                          </span>
+                          {status?.grokCli?.installed ? (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 font-medium">
+                              installed
+                            </span>
+                          ) : (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 font-medium">
+                              not installed
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          xAI Grok CLI (web + X search)
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={isGrokEnabled}
+                      onCheckedChange={toggleGrok}
+                      disabled={saving || !status?.grokCli?.installed}
+                    />
+                  </div>
+
+                  {/* Grok Installation hint when not installed */}
+                  {!status?.grokCli?.installed && !statusLoading && (
+                    <div className="p-4 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-900/20">
+                      <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
+                        Grok CLI not installed
+                      </p>
+                      <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
+                        Install globally (requires xAI API key):
+                      </p>
+                      <code className="text-sm bg-blue-100 dark:bg-blue-900/40 px-2 py-1 rounded font-mono">
+                        npm install -g grok-cli
+                      </code>
+                      <div className="mt-3">
+                        <a
+                          href="https://github.com/lalomorales22/grok-4-cli"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-700 dark:text-blue-300 hover:underline inline-flex items-center gap-1"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          View documentation
+                        </a>
+                      </div>
                     </div>
                   )}
                 </div>

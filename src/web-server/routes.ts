@@ -60,9 +60,9 @@ import { isUnifiedConfig } from '../config/unified-config-types';
 import { isSensitiveKey, maskSensitiveValue } from '../utils/sensitive-keys';
 import {
   getWebSearchReadiness,
-  getMcpWebSearchStatus,
   getGeminiCliStatus,
-} from '../utils/mcp-manager';
+  getGrokCliStatus,
+} from '../utils/websearch-manager';
 
 export const apiRoutes = Router();
 
@@ -1440,19 +1440,11 @@ apiRoutes.get('/websearch', (_req: Request, res: Response): void => {
 
 /**
  * PUT /api/websearch - Update WebSearch configuration
- * Body: WebSearchConfig fields (enabled, provider, fallback, gemini, mode, selectedProviders, customMcp)
+ * Body: WebSearchConfig fields (enabled, providers)
+ * Dashboard is the source of truth for provider selection.
  */
 apiRoutes.put('/websearch', (req: Request, res: Response): void => {
-  const {
-    enabled,
-    provider,
-    fallback,
-    webSearchPrimeUrl,
-    gemini,
-    mode,
-    selectedProviders,
-    customMcp,
-  } = req.body as Partial<WebSearchConfig>;
+  const { enabled, providers } = req.body as Partial<WebSearchConfig>;
 
   // Validate enabled
   if (enabled !== undefined && typeof enabled !== 'boolean') {
@@ -1460,45 +1452,9 @@ apiRoutes.put('/websearch', (req: Request, res: Response): void => {
     return;
   }
 
-  // Validate fallback
-  if (fallback !== undefined && typeof fallback !== 'boolean') {
-    res.status(400).json({ error: 'Invalid value for fallback. Must be a boolean.' });
-    return;
-  }
-
-  // Validate provider if specified
-  const validProviders = ['auto', 'web-search-prime', 'brave', 'tavily'];
-  if (provider && !validProviders.includes(provider)) {
-    res.status(400).json({
-      error: `Invalid provider. Must be one of: ${validProviders.join(', ')}`,
-    });
-    return;
-  }
-
-  // Validate webSearchPrimeUrl if specified
-  if (webSearchPrimeUrl !== undefined && typeof webSearchPrimeUrl !== 'string') {
-    res.status(400).json({ error: 'Invalid value for webSearchPrimeUrl. Must be a string.' });
-    return;
-  }
-
-  // Validate mode if specified
-  const validModes = ['sequential', 'parallel'];
-  if (mode && !validModes.includes(mode)) {
-    res.status(400).json({
-      error: `Invalid mode. Must be one of: ${validModes.join(', ')}`,
-    });
-    return;
-  }
-
-  // Validate selectedProviders if specified
-  if (selectedProviders !== undefined && !Array.isArray(selectedProviders)) {
-    res.status(400).json({ error: 'Invalid value for selectedProviders. Must be an array.' });
-    return;
-  }
-
-  // Validate customMcp if specified
-  if (customMcp !== undefined && !Array.isArray(customMcp)) {
-    res.status(400).json({ error: 'Invalid value for customMcp. Must be an array.' });
+  // Validate providers if specified
+  if (providers !== undefined && typeof providers !== 'object') {
+    res.status(400).json({ error: 'Invalid value for providers. Must be an object.' });
     return;
   }
 
@@ -1510,16 +1466,23 @@ apiRoutes.put('/websearch', (req: Request, res: Response): void => {
       return;
     }
 
-    // Merge updates - preserve all existing fields
+    // Merge updates - simple structure (Gemini CLI only for now)
     existingConfig.websearch = {
       enabled: enabled ?? existingConfig.websearch?.enabled ?? true,
-      provider: provider ?? existingConfig.websearch?.provider ?? 'auto',
-      fallback: fallback ?? existingConfig.websearch?.fallback ?? true,
-      webSearchPrimeUrl: webSearchPrimeUrl ?? existingConfig.websearch?.webSearchPrimeUrl,
-      gemini: gemini ?? existingConfig.websearch?.gemini ?? { enabled: true, timeout: 55 },
-      mode: mode ?? existingConfig.websearch?.mode ?? 'sequential',
-      selectedProviders: selectedProviders ?? existingConfig.websearch?.selectedProviders ?? [],
-      customMcp: customMcp ?? existingConfig.websearch?.customMcp ?? [],
+      providers: providers
+        ? {
+            gemini: {
+              enabled:
+                providers.gemini?.enabled ??
+                existingConfig.websearch?.providers?.gemini?.enabled ??
+                true,
+              timeout:
+                providers.gemini?.timeout ??
+                existingConfig.websearch?.providers?.gemini?.timeout ??
+                55,
+            },
+          }
+        : existingConfig.websearch?.providers,
     };
 
     saveUnifiedConfig(existingConfig);
@@ -1534,13 +1497,13 @@ apiRoutes.put('/websearch', (req: Request, res: Response): void => {
 });
 
 /**
- * GET /api/websearch/status - Get comprehensive WebSearch status
- * Returns: { geminiCli, mcpServers, readiness }
+ * GET /api/websearch/status - Get WebSearch status
+ * Returns: { geminiCli, grokCli, readiness }
  */
 apiRoutes.get('/websearch/status', (_req: Request, res: Response): void => {
   try {
     const geminiCli = getGeminiCliStatus();
-    const mcpStatus = getMcpWebSearchStatus();
+    const grokCli = getGrokCliStatus();
     const readiness = getWebSearchReadiness();
 
     res.json({
@@ -1549,10 +1512,10 @@ apiRoutes.get('/websearch/status', (_req: Request, res: Response): void => {
         path: geminiCli.path,
         version: geminiCli.version,
       },
-      mcpServers: {
-        configured: mcpStatus.configured,
-        ccsManaged: mcpStatus.ccsManaged,
-        userAdded: mcpStatus.userAdded,
+      grokCli: {
+        installed: grokCli.installed,
+        path: grokCli.path,
+        version: grokCli.version,
       },
       readiness: {
         status: readiness.readiness,

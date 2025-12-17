@@ -64,6 +64,7 @@ export function getConfigFormat(): 'yaml' | 'json' | 'none' {
 /**
  * Load unified config from YAML file.
  * Returns null if file doesn't exist or format check fails.
+ * Auto-upgrades config if version is outdated (regenerates comments).
  */
 export function loadUnifiedConfig(): UnifiedConfig | null {
   const yamlPath = getConfigYamlPath();
@@ -80,6 +81,19 @@ export function loadUnifiedConfig(): UnifiedConfig | null {
     if (!isUnifiedConfig(parsed)) {
       console.error(`[!] Invalid config format in ${yamlPath}`);
       return null;
+    }
+
+    // Auto-upgrade if version is outdated (regenerates YAML with new comments)
+    if ((parsed.version ?? 1) < UNIFIED_CONFIG_VERSION) {
+      parsed.version = UNIFIED_CONFIG_VERSION;
+      try {
+        saveUnifiedConfig(parsed);
+        if (process.env.CCS_DEBUG) {
+          console.error(`[i] Config upgraded to v${UNIFIED_CONFIG_VERSION}`);
+        }
+      } catch {
+        // Ignore save errors during upgrade - config still works
+      }
     }
 
     return parsed;
@@ -117,18 +131,20 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
     },
     websearch: {
       enabled: partial.websearch?.enabled ?? defaults.websearch?.enabled ?? true,
-      provider: partial.websearch?.provider ?? defaults.websearch?.provider ?? 'auto',
-      fallback: partial.websearch?.fallback ?? defaults.websearch?.fallback ?? true,
-      webSearchPrimeUrl:
-        partial.websearch?.webSearchPrimeUrl ?? defaults.websearch?.webSearchPrimeUrl,
-      gemini: {
-        enabled: partial.websearch?.gemini?.enabled ?? defaults.websearch?.gemini?.enabled ?? true,
-        timeout: partial.websearch?.gemini?.timeout ?? defaults.websearch?.gemini?.timeout ?? 55,
+      providers: {
+        gemini: {
+          enabled:
+            partial.websearch?.providers?.gemini?.enabled ??
+            partial.websearch?.gemini?.enabled ?? // Legacy fallback
+            true,
+          timeout:
+            partial.websearch?.providers?.gemini?.timeout ??
+            partial.websearch?.gemini?.timeout ?? // Legacy fallback
+            55,
+        },
       },
-      mode: partial.websearch?.mode ?? defaults.websearch?.mode ?? 'sequential',
-      selectedProviders:
-        partial.websearch?.selectedProviders ?? defaults.websearch?.selectedProviders ?? [],
-      customMcp: partial.websearch?.customMcp ?? defaults.websearch?.customMcp ?? [],
+      // Legacy fields (keep for backwards compatibility during read)
+      gemini: partial.websearch?.gemini,
     },
   };
 }
@@ -245,11 +261,19 @@ function generateYamlWithComments(config: UnifiedConfig): string {
   // WebSearch section
   if (config.websearch) {
     lines.push('# ----------------------------------------------------------------------------');
-    lines.push('# WebSearch: MCP auto-configuration for third-party profiles');
-    lines.push('# enabled: true/false - Enable/disable MCP web-search auto-config');
-    lines.push('# provider: auto | web-search-prime | brave | tavily');
-    lines.push('# fallback: true/false - Enable fallback chain when provider fails');
-    lines.push('# API keys: Set BRAVE_API_KEY or TAVILY_API_KEY env vars');
+    lines.push('# WebSearch: Provider configuration for third-party profiles');
+    lines.push('# Dashboard (`ccs config`) is the source of truth for provider selection.');
+    lines.push('#');
+    lines.push('# enabled: Master switch - auto-disables when no providers enabled');
+    lines.push('# mode: sequential (try in order) | parallel (merge all results)');
+    lines.push('#');
+    lines.push('# providers:');
+    lines.push('#   gemini: Uses Gemini CLI with google_web_search tool');
+    lines.push('#   web-search-prime: HTTP MCP endpoint (z.ai subscription)');
+    lines.push('#   brave: Brave Search API (requires BRAVE_API_KEY)');
+    lines.push('#   tavily: Tavily Search API (requires TAVILY_API_KEY)');
+    lines.push('#');
+    lines.push('# customMcp: User-defined MCP servers (BYOM - Bring Your Own MCP)');
     lines.push('# ----------------------------------------------------------------------------');
     lines.push(
       yaml
@@ -325,42 +349,45 @@ export function setDefaultProfile(name: string): void {
 }
 
 /**
+ * Gemini CLI WebSearch configuration
+ */
+export interface GeminiWebSearchInfo {
+  enabled: boolean;
+  timeout: number;
+}
+
+/**
  * Get websearch configuration.
  * Returns defaults if not configured.
+ * Simplified: Gemini CLI only (future CLI tools can be added).
  */
 export function getWebSearchConfig(): {
   enabled: boolean;
-  provider: 'auto' | 'web-search-prime' | 'brave' | 'tavily';
-  fallback: boolean;
-  webSearchPrimeUrl?: string;
-  gemini: {
-    enabled: boolean;
-    timeout: number;
+  providers?: {
+    gemini?: GeminiWebSearchInfo;
   };
-  mode: 'sequential' | 'parallel';
-  selectedProviders: string[];
-  customMcp: Array<{
-    name: string;
-    type: 'http' | 'stdio';
-    url?: string;
-    headers?: Record<string, string>;
-    command?: string;
-    args?: string[];
-    env?: Record<string, string>;
-  }>;
+  // Legacy fields (deprecated)
+  gemini?: { enabled?: boolean; timeout?: number };
 } {
   const config = loadOrCreateUnifiedConfig();
+
+  // Build provider config from new format or legacy fallbacks
+  const geminiConfig: GeminiWebSearchInfo = {
+    enabled:
+      config.websearch?.providers?.gemini?.enabled ?? config.websearch?.gemini?.enabled ?? true,
+    timeout:
+      config.websearch?.providers?.gemini?.timeout ?? config.websearch?.gemini?.timeout ?? 55,
+  };
+
+  // Auto-disable master switch if Gemini is not enabled
+  const enabled = geminiConfig.enabled && (config.websearch?.enabled ?? true);
+
   return {
-    enabled: config.websearch?.enabled ?? true,
-    provider: config.websearch?.provider ?? 'auto',
-    fallback: config.websearch?.fallback ?? true,
-    webSearchPrimeUrl: config.websearch?.webSearchPrimeUrl,
-    gemini: {
-      enabled: config.websearch?.gemini?.enabled ?? true,
-      timeout: config.websearch?.gemini?.timeout ?? 55,
+    enabled,
+    providers: {
+      gemini: geminiConfig,
     },
-    mode: config.websearch?.mode ?? 'sequential',
-    selectedProviders: config.websearch?.selectedProviders ?? [],
-    customMcp: config.websearch?.customMcp ?? [],
+    // Legacy field for backwards compatibility
+    gemini: config.websearch?.gemini,
   };
 }

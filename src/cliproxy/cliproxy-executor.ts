@@ -318,13 +318,11 @@ export async function execClaudeWithCLIProxy(
   const existingProxy = getExistingProxy(cfg.port);
   let proxy: ChildProcess | null = null;
   let sessionId: string;
-  let isReusingProxy = false;
 
   if (existingProxy) {
     // Reuse existing proxy - another CCS session started it
     log(`Reusing existing CLIProxy on port ${cfg.port} (PID ${existingProxy.pid})`);
     sessionId = registerSession(cfg.port, existingProxy.pid);
-    isReusingProxy = true;
     console.log(
       info(`Joined existing CLIProxy (${existingProxy.sessions.length + 1} sessions active)`)
     );
@@ -363,26 +361,20 @@ export async function execClaudeWithCLIProxy(
     }
 
     // 6b. Spawn CLIProxyAPI binary (only if not reusing existing proxy)
+    // Use detached mode so proxy persists after terminal closes
     const proxyArgs = ['--config', configPath];
 
     log(`Spawning: ${binaryPath} ${proxyArgs.join(' ')}`);
 
     proxy = spawn(binaryPath, proxyArgs, {
-      stdio: ['ignore', verbose ? 'pipe' : 'ignore', verbose ? 'pipe' : 'ignore'],
-      detached: false,
+      stdio: ['ignore', 'ignore', 'ignore'],
+      detached: true, // Persist after parent terminal closes
     });
 
-    // Forward proxy output in verbose mode
-    if (verbose) {
-      proxy.stdout?.on('data', (data: Buffer) => {
-        process.stderr.write(`[cliproxy-out] ${data.toString()}`);
-      });
-      proxy.stderr?.on('data', (data: Buffer) => {
-        process.stderr.write(`[cliproxy-err] ${data.toString()}`);
-      });
-    }
+    // Unref so parent process can exit independently
+    proxy.unref();
 
-    // Handle proxy errors
+    // Handle proxy errors (only fires if spawn itself fails)
     proxy.on('error', (error) => {
       console.error(fail(`CLIProxy spawn error: ${error.message}`));
     });
@@ -478,25 +470,14 @@ export async function execClaudeWithCLIProxy(
     });
   }
 
-  // 8. Cleanup: unregister session when Claude exits, kill proxy only if last session
+  // 8. Cleanup: unregister session when Claude exits
+  // Proxy persists by default - use 'ccs cliproxy stop' to kill manually
   claude.on('exit', (code, signal) => {
     log(`Claude exited: code=${code}, signal=${signal}`);
 
-    // Unregister this session - returns true if we were the last session
-    const shouldKillProxy = unregisterSession(sessionId);
-    log(`Session ${sessionId} unregistered, shouldKillProxy=${shouldKillProxy}`);
-
-    if (shouldKillProxy && proxy) {
-      // We were the last session and we own the proxy - kill it
-      log('Last session, killing proxy');
-      proxy.kill('SIGTERM');
-    } else if (shouldKillProxy && isReusingProxy) {
-      // We were the last session but don't own the proxy process
-      // The proxy will be cleaned up as zombie on next session start
-      log('Last session but reusing proxy, proxy will be cleaned up later');
-    } else {
-      log(`Other sessions still active, keeping proxy running`);
-    }
+    // Unregister this session (proxy keeps running for persistence)
+    unregisterSession(sessionId);
+    log(`Session ${sessionId} unregistered, proxy persists for other sessions or future use`);
 
     if (signal) {
       process.kill(process.pid, signal as NodeJS.Signals);
@@ -508,11 +489,8 @@ export async function execClaudeWithCLIProxy(
   claude.on('error', (error) => {
     console.error(fail(`Claude CLI error: ${error}`));
 
-    // Unregister and conditionally kill proxy
-    const shouldKillProxy = unregisterSession(sessionId);
-    if (shouldKillProxy && proxy) {
-      proxy.kill('SIGTERM');
-    }
+    // Unregister session, proxy keeps running
+    unregisterSession(sessionId);
     process.exit(1);
   });
 
@@ -520,26 +498,13 @@ export async function execClaudeWithCLIProxy(
   const cleanup = () => {
     log('Parent signal received, cleaning up');
 
-    // Unregister and conditionally kill proxy
-    const shouldKillProxy = unregisterSession(sessionId);
-    if (shouldKillProxy && proxy) {
-      proxy.kill('SIGTERM');
-    }
+    // Unregister session, proxy keeps running
+    unregisterSession(sessionId);
     claude.kill('SIGTERM');
   };
 
   process.once('SIGTERM', cleanup);
   process.once('SIGINT', cleanup);
-
-  // Handle proxy crash (only if we own the proxy)
-  if (proxy) {
-    proxy.on('exit', (code, signal) => {
-      if (code !== 0 && code !== null) {
-        log(`Proxy exited unexpectedly: code=${code}, signal=${signal}`);
-        // Don't kill Claude - it may have already exited
-      }
-    });
-  }
 }
 
 /**

@@ -1,3 +1,10 @@
+## [6.3.1](https://github.com/kaitranntt/ccs/compare/v6.3.0...v6.3.1) (2025-12-18)
+
+
+### Bug Fixes
+
+* **ui:** limit Connection Timeline to 100 events to prevent lag ([170dcdc](https://github.com/kaitranntt/ccs/commit/170dcdc44f825bb64bedd7eb53fff6127ca94bce))
+
 # [6.3.0](https://github.com/kaitranntt/ccs/compare/v6.2.1...v6.3.0) (2025-12-18)
 
 

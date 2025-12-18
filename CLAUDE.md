@@ -13,36 +13,60 @@ CLI wrapper for instant switching between multiple Claude accounts and alternati
 - **DRY**: One source of truth (config.json)
 - **CLI-First**: All features must have CLI interface
 
+## Common Mistakes (AVOID)
+
+| Mistake | Consequence | Correct Action |
+|---------|-------------|----------------|
+| Running `validate` without `format` first | format:check fails | Run `bun run format` BEFORE validate |
+| Using `chore:` for dev→main PR | No npm release triggered | Use `feat:` or `fix:` prefix |
+| Committing directly to `main` or `dev` | Bypasses CI/review | Always use PRs |
+| Manual version bump or git tag | Conflicts with semantic-release | Let CI handle versioning |
+| Forgetting `--help` update | CLI docs out of sync | Update src/ccs.ts, lib/ccs, lib/ccs.ps1 |
+
 ## Quality Gates (MANDATORY)
 
-Quality gates MUST pass before committing. Run from project root.
+Quality gates MUST pass before committing. **Both projects have identical workflow.**
 
-### Main Project (src/)
+### Pre-Commit Sequence (FOLLOW THIS ORDER)
 
 ```bash
-# Full validation (REQUIRED before commit/PR)
-bun run validate     # typecheck + lint:fix + format:check + test:all
+# Main project (from repo root)
+bun run format              # Step 1: Fix formatting
+bun run lint:fix            # Step 2: Fix lint issues
+bun run validate            # Step 3: Final check (must pass)
 
-# Individual commands
-bun run typecheck    # tsc --noEmit
-bun run lint:fix     # eslint src/ --fix
-bun run format:check # prettier --check src/
-bun run test:all     # bun test
-
-# Fix issues
-bun run lint:fix     # Auto-fix lint issues
-bun run format       # Auto-fix formatting (prettier --write)
+# UI project (if UI changed)
+cd ui
+bun run format              # Step 1: Fix formatting
+bun run lint:fix            # Step 2: Fix lint issues
+bun run validate            # Step 3: Final check (must pass)
 ```
 
-**ESLint rules (eslint.config.mjs) - ALL errors:**
+**WHY THIS ORDER:**
+- `validate` runs `format:check` which only VERIFIES—won't fix
+- If format:check fails, you skipped step 1
+- CI runs `validate` only (no auto-fix)—local must be clean
+
+### What Validate Runs
+
+| Project | Command | Runs |
+|---------|---------|------|
+| Main | `bun run validate` | typecheck + lint:fix + format:check + test:all |
+| UI | `bun run validate` | typecheck + lint:fix + format:check |
+
+### ESLint Rules (ALL errors)
+
 | Rule | Level | Notes |
 |------|-------|-------|
 | `@typescript-eslint/no-unused-vars` | error | Ignore `_` prefix |
 | `@typescript-eslint/no-explicit-any` | error | Use proper types or `unknown` |
 | `@typescript-eslint/no-non-null-assertion` | error | No `!` assertions |
 | `prefer-const`, `no-var`, `eqeqeq` | error | Code quality |
+| `react-hooks/*` (UI only) | recommended | Hooks rules |
+| `react-refresh/*` (UI only) | vite | Fast refresh |
 
-**TypeScript (tsconfig.json) - strict mode:**
+### TypeScript Options (strict mode)
+
 | Option | Value | Notes |
 |--------|-------|-------|
 | `strict` | true | All strict flags enabled |
@@ -51,67 +75,11 @@ bun run format       # Auto-fix formatting (prettier --write)
 | `noImplicitReturns` | true | All paths must return |
 | `noFallthroughCasesInSwitch` | true | Explicit case handling |
 
-### UI Project (ui/)
-
-```bash
-cd ui
-
-# Full validation (REQUIRED before commit/PR)
-bun run validate     # typecheck + lint:fix + format:check (no tests)
-
-# Individual commands
-bun run typecheck    # tsc -b --noEmit
-bun run lint:fix     # eslint . --fix
-bun run format:check # prettier --check src/
-
-# Fix issues
-bun run lint:fix     # Auto-fix lint issues
-bun run format       # Auto-fix formatting
-```
-
-**ESLint rules (ui/eslint.config.js) - ALL errors:**
-| Rule | Level | Notes |
-|------|-------|-------|
-| `@typescript-eslint/no-unused-vars` | error | Ignore `_` prefix |
-| `@typescript-eslint/no-explicit-any` | error | Use proper types or `unknown` |
-| `@typescript-eslint/no-non-null-assertion` | error | No `!` assertions |
-| `prefer-const`, `no-var`, `eqeqeq` | error | Code quality |
-| `react-hooks/*` | recommended | Hooks rules from plugin |
-| `react-refresh/*` | vite | Fast refresh compatibility |
-
-**TypeScript (ui/tsconfig.app.json) - strict mode:**
-| Option | Value | Notes |
-|--------|-------|-------|
-| `strict` | true | All strict flags enabled |
-| `noUnusedLocals` | true | No unused variables |
-| `noUnusedParameters` | true | No unused params |
-| `noFallthroughCasesInSwitch` | true | Explicit case handling |
-| `erasableSyntaxOnly` | true | No runtime type constructs |
-| `noUncheckedSideEffectImports` | true | Validate side-effect imports |
-
 ### Automatic Enforcement
 
 - `prepublishOnly` / `prepack` runs `build:all` + `validate` + `sync-version.js`
 - CI/CD runs `bun run validate` on every PR
 - husky pre-commit hooks enforce conventional commits
-
-### File Structure
-
-```
-src/           → TypeScript source (main project)
-dist/          → Compiled JavaScript (npm package)
-lib/           → Native shell scripts (bash, PowerShell)
-ui/src/        → React components, hooks, pages
-ui/src/components/ui/ → shadcn/ui components
-dist/ui/       → Built UI bundle (served by Express)
-```
-
-### Development Server
-
-```bash
-bun run dev          # Build + start config server (http://localhost:3000)
-```
-**IMPORTANT:** Use `bun run dev` at CCS root for always up-to-date code. Do NOT use `ccs config` during development as it uses the globally installed version.
 
 ## Critical Constraints (NEVER VIOLATE)
 
@@ -121,6 +89,17 @@ bun run dev          # Build + start config server (http://localhost:3000)
 4. **Cross-platform parity** - bash/PowerShell/Node.js must behave identically
 5. **CLI documentation** - ALL changes MUST update `--help` in src/ccs.ts, lib/ccs, lib/ccs.ps1
 6. **Idempotent** - All install operations safe to run multiple times
+
+## File Structure
+
+```
+src/           → TypeScript source (main project)
+dist/          → Compiled JavaScript (npm package)
+lib/           → Native shell scripts (bash, PowerShell)
+ui/src/        → React components, hooks, pages
+ui/src/components/ui/ → shadcn/ui components
+dist/ui/       → Built UI bundle (served by Express)
+```
 
 ## Key Technical Details
 
@@ -151,7 +130,7 @@ Symlinked from `~/.ccs/shared/`: commands/, skills/, agents/
 Profile-specific: settings.json, sessions/, todolists/, logs/
 Windows fallback: Copies if symlinks unavailable
 
-## Code Standards (REQUIRED)
+## Code Standards
 
 ### Architecture
 - `lib/ccs`, `lib/ccs.ps1` - Bootstrap scripts (delegate to Node.js via npx)
@@ -168,9 +147,8 @@ Windows fallback: Copies if symlinks unavailable
 ### TypeScript (src/*.ts)
 - Node.js 14+, Bun 1.0+, TypeScript 5.3, strict mode
 - `child_process.spawn`, handle SIGINT/SIGTERM
-- Run `bun run validate` before committing
 
-### Terminal Output (ENFORCE)
+### Terminal Output
 - ASCII only: [OK], [!], [X], [i] (NO emojis)
 - TTY detect before colors, respect NO_COLOR
 - Box borders for errors: ╔═╗║╚╝
@@ -179,181 +157,79 @@ Windows fallback: Copies if symlinks unavailable
 
 **ALL commits MUST follow conventional commit format. Non-compliant commits are rejected by husky.**
 
-### Commit Format
+### Format
 ```
 <type>(<scope>): <description>
-
-[optional body]
-
-[optional footer]
 ```
 
-### Commit Types (determines version bump)
+### Types (determines version bump)
+
 | Type | Version Bump | Use For |
 |------|--------------|---------|
 | `feat:` | MINOR | New features |
 | `fix:` | PATCH | Bug fixes |
-| `perf:` | PATCH | Performance improvements |
+| `perf:` | PATCH | Performance |
 | `feat!:` | MAJOR | Breaking changes |
-| `docs:` | None | Documentation only |
-| `style:` | None | Formatting, no code change |
-| `refactor:` | None | Code restructure |
-| `test:` | None | Adding tests |
-| `chore:` | None | Maintenance |
-| `ci:` | None | CI/CD changes |
-| `build:` | None | Build system |
+| `docs:`, `style:`, `refactor:`, `test:`, `chore:`, `ci:`, `build:` | None | Non-release |
 
 ### Examples
 ```bash
-# Good - will be accepted
+# Good
 git commit -m "feat(cliproxy): add OAuth token refresh"
 git commit -m "fix(doctor): handle missing config gracefully"
-git commit -m "feat!: remove deprecated GLMT proxy"  # BREAKING CHANGE
 
-# Bad - will be REJECTED
+# Bad - REJECTED
 git commit -m "added new feature"
 git commit -m "Fixed bug"
-git commit -m "WIP"
 ```
 
-## Branching Strategy (FOLLOW STRICTLY)
+## Branching Strategy
 
-### Branch Hierarchy
-
+### Hierarchy
 ```
 main (production) ← dev (integration) ← feat/* | fix/* | docs/*
-     ↑                   ↑
-     │                   └── All development merges here FIRST
-     │
-     └── Only receives: (1) Tested code from dev, (2) Hotfixes
+     ↑
+     └── hotfix/* (critical only, skips dev)
 ```
 
-### Branch Types
-
-| Branch | Purpose | Merges From | Releases To |
-|--------|---------|-------------|-------------|
-| `main` | Production-ready | `dev`, `hotfix/*` | npm `@latest` |
-| `dev` | Integration/staging | `feat/*`, `fix/*`, `docs/*` | npm `@dev` |
-| `feat/*` | New features | - | → `dev` |
-| `fix/*` | Bug fixes | - | → `dev` |
-| `docs/*` | Documentation | - | → `dev` |
-| `hotfix/*` | Critical production fixes | - | → `main` directly |
-
-### Branch Naming Convention
-
-```
-<type>/<short-description>
-
-# Examples:
-feat/oauth-token-refresh
-fix/doctor-missing-config
-docs/update-installation-guide
-hotfix/critical-auth-bug
-```
-
-### Standard Development Workflow (Features/Fixes → Dev → Main)
-
+### Standard Workflow
 ```bash
-# 1. ALWAYS start from dev (integration branch)
-git checkout dev
-git pull origin dev
-
-# 2. Create feature branch FROM DEV
+git checkout dev && git pull origin dev
 git checkout -b feat/my-feature
-
-# 3. Make changes with conventional commits
-git commit -m "feat(scope): add new feature"
-git commit -m "test(scope): add unit tests"
-
-# 4. Push and create PR to DEV (not main!)
+# ... develop with conventional commits ...
 git push -u origin feat/my-feature
-gh pr create --base dev --title "feat(scope): add new feature"
-# → Merge triggers npm @dev release for testing
-
-# 5. After testing in dev, promote to main (MUST use feat: or fix: prefix!)
-git checkout dev
+gh pr create --base dev --title "feat(scope): description"
+# After testing in @dev:
 gh pr create --base main --title "feat(release): promote dev to main"
-# → Merge triggers npm @latest release
-# WARNING: Using "chore:" will NOT trigger a release!
-
-# 6. Clean up
-git checkout dev
-git pull origin dev
-git branch -d feat/my-feature
 ```
 
-### Hotfix Workflow (Critical Production Fixes Only)
-
+### Hotfix Workflow (Production Emergencies Only)
 ```bash
-# 1. Start from main (production)
-git checkout main
-git pull origin main
-
-# 2. Create hotfix branch
+git checkout main && git pull origin main
 git checkout -b hotfix/critical-bug
-
-# 3. Fix and commit
-git commit -m "fix: critical authentication bypass"
-
-# 4. PR directly to main (skip dev)
-gh pr create --base main --title "fix: critical authentication bypass"
-# → Merge triggers immediate npm @latest release
-
-# 5. Sync hotfix back to dev
-git checkout dev
-git pull origin dev
-git merge main
-git push origin dev
-
-# 6. Clean up
-git branch -d hotfix/critical-bug
-```
-
-### Keeping Dev in Sync with Main
-
-```bash
-# After any main release, sync to dev
-git checkout dev
-git pull origin dev
-git merge main
-git push origin dev
+# ... fix ...
+gh pr create --base main --title "fix: critical issue"
+# Then sync: git checkout dev && git merge main && git push
 ```
 
 ### Rules
-
-1. **NEVER commit directly to `main` or `dev`** - always use PRs
-2. **ALWAYS create feature branches from `dev`** (not main)
-3. **Only `hotfix/*` branches go directly to `main`**
-4. **`dev` must always be up-to-date with `main`**
-5. **Delete feature branches after merge**
-6. **Test in `@dev` before promoting to `@latest`**
-7. **dev→main PRs MUST use `feat:` or `fix:` prefix** - `chore:` won't trigger npm release
+1. **NEVER** commit directly to `main` or `dev`
+2. Feature branches from `dev`, hotfixes from `main`
+3. dev→main PRs MUST use `feat:` or `fix:` (not `chore:`)
+4. Delete branches after merge
 
 ## Automated Releases (DO NOT MANUALLY TAG)
 
 **Releases are FULLY AUTOMATED via semantic-release. NEVER manually bump versions or create tags.**
 
-### Release Channels
 | Branch | npm Tag | When |
 |--------|---------|------|
 | `main` | `@latest` | Merge PR to main |
 | `dev` | `@dev` | Push to dev branch |
 
-### What CI Does Automatically
-1. Analyzes commits since last release
-2. Determines version bump from commit types
-3. Updates `CHANGELOG.md`, `VERSION`, `package.json`, installers
-4. Creates git tag
-5. Publishes to npm
-6. Creates GitHub release
+**CI handles:** version bump, CHANGELOG.md, git tag, npm publish, GitHub release.
 
-**NEVER DO:**
-- `./scripts/bump-version.sh` (deprecated, emergency only)
-- `git tag vX.Y.Z` (tags are auto-created)
-- Manual `npm publish` (CI handles it)
-- Commit directly to `main`
-
-## Development Workflows
+## Development
 
 ### Testing (REQUIRED before PR)
 ```bash
@@ -365,39 +241,30 @@ bun run test:unit         # Unit tests
 
 ### Local Development
 ```bash
-./scripts/dev-install.sh       # Build, pack, install globally
-rm -rf ~/.ccs                  # Clean environment
+bun run dev               # Build + start config server (http://localhost:3000)
+./scripts/dev-install.sh  # Build, pack, install globally
+rm -rf ~/.ccs             # Clean environment
 ```
 
-## Development Tasks (FOLLOW STRICTLY)
+**IMPORTANT:** Use `bun run dev` at CCS root for always up-to-date code. Do NOT use `ccs config` during development as it uses the globally installed version.
 
-### New Feature Checklist
-1. Verify YAGNI/KISS/DRY alignment - reject if doesn't align
-2. Implement in TypeScript (`src/*.ts`)
-3. **REQUIRED**: Update `--help` in src/ccs.ts, lib/ccs, lib/ccs.ps1
-4. Add unit tests (`tests/unit/**/*.test.js`)
-5. Run `bun run validate`
-6. Update README.md if user-facing
-7. **Commit with**: `git commit -m "feat(scope): description"`
+## Pre-Commit Checklist
 
-### Bug Fix Checklist
-1. Add regression test first
-2. Fix in TypeScript (or native scripts if bootstrap-related)
-3. Run `bun run validate`
-4. **Commit with**: `git commit -m "fix(scope): description"`
+**Quality (BLOCKERS):**
+- [ ] `bun run format` — formatting fixed
+- [ ] `bun run validate` — all checks pass
+- [ ] `cd ui && bun run format && bun run validate` — if UI changed
 
-## Pre-PR Checklist (MANDATORY)
+**Code:**
+- [ ] Conventional commit format (`feat:`, `fix:`, etc.)
+- [ ] `--help` updated (src/ccs.ts, lib/ccs, lib/ccs.ps1) — if CLI changed
+- [ ] Tests added/updated — if behavior changed
+- [ ] README.md updated — if user-facing
 
-**Quality Gates:**
-- [ ] `bun run validate` passes (main: typecheck + lint:fix + format:check + tests)
-- [ ] `cd ui && bun run validate` passes (ui: typecheck + lint:fix + format:check)
-
-**Code Quality:**
-- [ ] All commits follow conventional format (`feat:`, `fix:`, etc.)
-- [ ] `--help` updated and consistent across src/ccs.ts, lib/ccs, lib/ccs.ps1
+**Standards:**
 - [ ] ASCII only (NO emojis), NO_COLOR respected
-- [ ] Idempotent install, concurrent sessions work, instance isolation maintained
-- [ ] **DO NOT** manually bump version or create tags
+- [ ] YAGNI/KISS/DRY alignment verified
+- [ ] No manual version bump or tags
 
 ## Error Handling Principles
 

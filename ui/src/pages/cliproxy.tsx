@@ -15,6 +15,7 @@ import { QuickSetupWizard } from '@/components/quick-setup-wizard';
 import { AddAccountDialog } from '@/components/add-account-dialog';
 import { ProviderEditor } from '@/components/cliproxy/provider-editor';
 import { ProviderLogo } from '@/components/cliproxy/provider-logo';
+import { ProxyStatusWidget } from '@/components/proxy-status-widget';
 import {
   useCliproxy,
   useCliproxyAuth,
@@ -306,6 +307,11 @@ export function CliproxyPage() {
             )}
           </div>
         </ScrollArea>
+
+        {/* Proxy Status Widget */}
+        <div className="p-3 border-t">
+          <ProxyStatusWidget />
+        </div>
 
         {/* Footer Stats */}
         <div className="p-3 border-t bg-background text-xs text-muted-foreground">

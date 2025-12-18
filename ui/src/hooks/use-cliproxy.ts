@@ -209,3 +209,34 @@ export function useDeletePreset() {
     },
   });
 }
+
+// ==================== Proxy Process Status ====================
+
+export function useProxyStatus() {
+  return useQuery({
+    queryKey: ['proxy-status'],
+    queryFn: () => api.cliproxy.proxyStatus(),
+    refetchInterval: 30000, // Refresh every 30s as backup (websocket is primary)
+  });
+}
+
+export function useStartProxy() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.cliproxy.proxyStart(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['proxy-status'] });
+      if (data.alreadyRunning) {
+        toast.info('CLIProxy was already running');
+      } else if (data.started) {
+        toast.success('CLIProxy started successfully');
+      } else {
+        toast.error(data.error || 'Failed to start CLIProxy');
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}

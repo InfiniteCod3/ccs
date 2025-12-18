@@ -40,6 +40,8 @@ import {
 } from '../cliproxy/account-manager';
 import type { CLIProxyProvider } from '../cliproxy/types';
 import { getClaudeEnvVars } from '../cliproxy/config-generator';
+import { getProxyStatus as getProxyProcessStatus } from '../cliproxy/session-tracker';
+import { ensureCliproxyService } from '../cliproxy/service-manager';
 // Unified config imports
 import {
   hasUnifiedConfig,
@@ -1285,6 +1287,56 @@ apiRoutes.get('/cliproxy/status', async (_req: Request, res: Response): Promise<
   try {
     const running = await isCliproxyRunning();
     res.json({ running });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/cliproxy/proxy-status - Get detailed proxy process status
+ * Returns: { running, port?, pid?, sessionCount?, startedAt? }
+ * Combines session tracker data with actual port check for accuracy
+ */
+apiRoutes.get('/cliproxy/proxy-status', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    // First check session tracker for detailed info
+    const sessionStatus = getProxyProcessStatus();
+
+    // If session tracker says running, trust it
+    if (sessionStatus.running) {
+      res.json(sessionStatus);
+      return;
+    }
+
+    // Session tracker says not running, but proxy might be running without session tracking
+    // (e.g., started before session persistence was implemented)
+    const actuallyRunning = await isCliproxyRunning();
+
+    if (actuallyRunning) {
+      // Proxy running but no session lock - legacy/untracked instance
+      res.json({
+        running: true,
+        port: 8317, // Default port
+        sessionCount: 0, // Unknown sessions
+        // No pid/startedAt since we don't have session lock
+      });
+    } else {
+      res.json(sessionStatus);
+    }
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/cliproxy/proxy-start - Start the CLIProxy service
+ * Returns: { started, alreadyRunning, port, error? }
+ * Starts proxy in background if not already running
+ */
+apiRoutes.post('/cliproxy/proxy-start', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await ensureCliproxyService();
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

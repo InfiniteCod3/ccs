@@ -154,6 +154,24 @@ export interface CreatePreset {
   haiku?: string;
 }
 
+/** CLIProxy process status from session tracker */
+export interface ProxyProcessStatus {
+  running: boolean;
+  port?: number;
+  pid?: number;
+  sessionCount?: number;
+  startedAt?: string;
+}
+
+/** Result from starting proxy service */
+export interface ProxyStartResult {
+  started: boolean;
+  alreadyRunning: boolean;
+  port: number;
+  configRegenerated?: boolean;
+  error?: string;
+}
+
 // API
 export const api = {
   profiles: {
@@ -184,6 +202,10 @@ export const api = {
         body: JSON.stringify(data),
       }),
     delete: (name: string) => request(`/cliproxy/${name}`, { method: 'DELETE' }),
+
+    // Proxy process status and control
+    proxyStatus: () => request<ProxyProcessStatus>('/cliproxy/proxy-status'),
+    proxyStart: () => request<ProxyStartResult>('/cliproxy/proxy-start', { method: 'POST' }),
 
     // Stats and models for Overview tab
     stats: () => request<{ usage: Record<string, unknown> }>('/cliproxy/usage'),

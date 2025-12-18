@@ -48,6 +48,10 @@ export function useWebSocket() {
           toast.info('Accounts updated');
           break;
 
+        case 'proxy-status-changed':
+          queryClient.invalidateQueries({ queryKey: ['proxy-status'] });
+          break;
+
         case 'pong':
           // Heartbeat response
           break;

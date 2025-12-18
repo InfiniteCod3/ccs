@@ -10,7 +10,7 @@ import * as path from 'path';
 import { getCcsDir } from '../utils/config-manager';
 
 export interface FileChangeEvent {
-  type: 'config-changed' | 'settings-changed' | 'profiles-changed';
+  type: 'config-changed' | 'settings-changed' | 'profiles-changed' | 'proxy-status-changed';
   path: string;
   timestamp: number;
 }
@@ -25,6 +25,7 @@ export function createFileWatcher(onChange: FileChangeCallback): FSWatcher {
       path.join(ccsDir, 'config.json'),
       path.join(ccsDir, '*.settings.json'),
       path.join(ccsDir, 'profiles.json'),
+      path.join(ccsDir, 'cliproxy', 'sessions.json'), // Proxy session tracking
     ],
     {
       persistent: true,
@@ -44,6 +45,8 @@ export function createFileWatcher(onChange: FileChangeCallback): FSWatcher {
       type = 'config-changed';
     } else if (basename === 'profiles.json') {
       type = 'profiles-changed';
+    } else if (basename === 'sessions.json') {
+      type = 'proxy-status-changed';
     } else {
       type = 'settings-changed';
     }

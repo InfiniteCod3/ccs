@@ -224,3 +224,78 @@ export function cleanupOrphanedSessions(port: number): void {
     deleteSessionLock();
   }
 }
+
+/**
+ * Stop the CLIProxy process and clean up session lock.
+ * @returns Object with success status and details
+ */
+export function stopProxy(): {
+  stopped: boolean;
+  pid?: number;
+  sessionCount?: number;
+  error?: string;
+} {
+  const lock = readSessionLock();
+
+  if (!lock) {
+    return { stopped: false, error: 'No active CLIProxy session found' };
+  }
+
+  // Check if proxy is running
+  if (!isProcessRunning(lock.pid)) {
+    deleteSessionLock();
+    return { stopped: false, error: 'CLIProxy was not running (cleaned up stale lock)' };
+  }
+
+  const sessionCount = lock.sessions.length;
+  const pid = lock.pid;
+
+  try {
+    // Kill the proxy process
+    process.kill(pid, 'SIGTERM');
+
+    // Clean up session lock
+    deleteSessionLock();
+
+    return { stopped: true, pid, sessionCount };
+  } catch (err) {
+    const error = err as NodeJS.ErrnoException;
+    if (error.code === 'ESRCH') {
+      // Process already gone
+      deleteSessionLock();
+      return { stopped: false, error: 'CLIProxy process already terminated' };
+    }
+    return { stopped: false, pid, error: `Failed to stop: ${error.message}` };
+  }
+}
+
+/**
+ * Get proxy status information.
+ */
+export function getProxyStatus(): {
+  running: boolean;
+  port?: number;
+  pid?: number;
+  sessionCount?: number;
+  startedAt?: string;
+} {
+  const lock = readSessionLock();
+
+  if (!lock) {
+    return { running: false };
+  }
+
+  // Verify proxy is still running
+  if (!isProcessRunning(lock.pid)) {
+    deleteSessionLock();
+    return { running: false };
+  }
+
+  return {
+    running: true,
+    port: lock.port,
+    pid: lock.pid,
+    sessionCount: lock.sessions.length,
+    startedAt: lock.startedAt,
+  };
+}

@@ -60,6 +60,7 @@ import {
   saveUnifiedConfig,
 } from '../config/unified-config-loader';
 import { isUnifiedConfigEnabled } from '../config/feature-flags';
+import { stopProxy, getProxyStatus } from '../cliproxy/session-tracker';
 
 // ============================================================================
 // PROFILE MANAGEMENT
@@ -804,6 +805,20 @@ async function showHelp(): Promise<void> {
   }
   console.log('');
 
+  // Proxy Lifecycle Commands
+  console.log(subheader('Proxy Lifecycle:'));
+  const lifecycleCmds: [string, string][] = [
+    ['status', 'Show running CLIProxy status'],
+    ['stop', 'Stop running CLIProxy instance'],
+  ];
+  const maxLifecycleLen = Math.max(...lifecycleCmds.map(([cmd]) => cmd.length));
+  for (const [cmd, desc] of lifecycleCmds) {
+    console.log(`  ${color(cmd.padEnd(maxLifecycleLen + 2), 'command')} ${desc}`);
+  }
+  console.log('');
+  console.log(dim('  Note: CLIProxy now persists by default. Use "stop" to terminate.'));
+  console.log('');
+
   // Binary Commands
   console.log(subheader('Binary Commands:'));
   const binaryCmds: [string, string][] = [
@@ -1042,6 +1057,62 @@ async function installLatest(verbose: boolean): Promise<void> {
 }
 
 // ============================================================================
+// PROXY LIFECYCLE COMMANDS
+// ============================================================================
+
+/**
+ * Handle 'ccs cliproxy stop' - Stop running CLIProxy instance
+ */
+async function handleStop(): Promise<void> {
+  await initUI();
+
+  console.log(header('Stop CLIProxy'));
+  console.log('');
+
+  const result = stopProxy();
+
+  if (result.stopped) {
+    console.log(ok(`CLIProxy stopped (PID ${result.pid})`));
+    if (result.sessionCount && result.sessionCount > 0) {
+      console.log(info(`${result.sessionCount} active session(s) were disconnected`));
+    }
+  } else {
+    console.log(warn(result.error || 'Failed to stop CLIProxy'));
+  }
+  console.log('');
+}
+
+/**
+ * Handle 'ccs cliproxy status' - Show running proxy status
+ */
+async function handleProxyStatus(): Promise<void> {
+  await initUI();
+
+  console.log(header('CLIProxy Status'));
+  console.log('');
+
+  const status = getProxyStatus();
+
+  if (status.running) {
+    console.log(`  Status:     ${color('Running', 'success')}`);
+    console.log(`  PID:        ${status.pid}`);
+    console.log(`  Port:       ${status.port}`);
+    console.log(`  Sessions:   ${status.sessionCount || 0} active`);
+    if (status.startedAt) {
+      const started = new Date(status.startedAt);
+      console.log(`  Started:    ${started.toLocaleString()}`);
+    }
+    console.log('');
+    console.log(dim('To stop: ccs cliproxy stop'));
+  } else {
+    console.log(`  Status:     ${color('Not running', 'warning')}`);
+    console.log('');
+    console.log(dim('CLIProxy starts automatically when you run ccs gemini, codex, etc.'));
+  }
+  console.log('');
+}
+
+// ============================================================================
 // MAIN ROUTER
 // ============================================================================
 
@@ -1071,6 +1142,17 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
 
   if (command === 'remove' || command === 'delete' || command === 'rm') {
     await handleRemove(args.slice(1));
+    return;
+  }
+
+  // Handle proxy lifecycle commands
+  if (command === 'stop') {
+    await handleStop();
+    return;
+  }
+
+  if (command === 'status') {
+    await handleProxyStatus();
     return;
   }
 

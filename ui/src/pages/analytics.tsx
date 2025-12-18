@@ -30,7 +30,8 @@ import {
   useSessions,
   type ModelUsage,
 } from '@/hooks/use-usage';
-import { getModelColor } from '@/lib/utils';
+import { getModelColor, cn } from '@/lib/utils';
+import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 
 // Format token count to human-readable (K/M/B)
 function formatTokens(num: number): string {
@@ -41,6 +42,8 @@ function formatTokens(num: number): string {
 }
 
 export function AnalyticsPage() {
+  const { privacyMode } = usePrivacy();
+
   // Default to last 30 days
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: subDays(new Date(), 30),
@@ -248,11 +251,21 @@ export function AnalyticsPage() {
                           </div>
                         </div>
                         {/* Token count */}
-                        <span className="text-[10px] text-muted-foreground w-14 text-right shrink-0">
+                        <span
+                          className={cn(
+                            'text-[10px] text-muted-foreground w-14 text-right shrink-0',
+                            privacyMode && PRIVACY_BLUR_CLASS
+                          )}
+                        >
                           {formatTokens(model.tokens)}
                         </span>
                         {/* Total cost */}
-                        <span className="font-mono font-medium w-16 text-right shrink-0">
+                        <span
+                          className={cn(
+                            'font-mono font-medium w-16 text-right shrink-0',
+                            privacyMode && PRIVACY_BLUR_CLASS
+                          )}
+                        >
                           ${model.cost.toFixed(2)}
                         </span>
                         <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity shrink-0" />

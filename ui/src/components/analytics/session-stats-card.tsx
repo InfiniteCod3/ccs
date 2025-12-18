@@ -2,7 +2,7 @@
  * Session Stats Card Component
  *
  * Displays session usage metrics including active sessions, average duration,
- * and session cost breakdown.
+ * and session cost breakdown. Respects privacy mode to blur sensitive data.
  */
 
 import { useMemo } from 'react';
@@ -12,6 +12,7 @@ import { Clock, Users, Zap, Terminal } from 'lucide-react';
 import type { PaginatedSessions } from '@/hooks/use-usage';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
+import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 
 interface SessionStatsCardProps {
   data: PaginatedSessions | undefined;
@@ -20,6 +21,8 @@ interface SessionStatsCardProps {
 }
 
 export function SessionStatsCard({ data, isLoading, className }: SessionStatsCardProps) {
+  const { privacyMode } = usePrivacy();
+
   const stats = useMemo(() => {
     if (!data?.sessions || data.sessions.length === 0) return null;
 
@@ -104,7 +107,9 @@ export function SessionStatsCard({ data, isLoading, className }: SessionStatsCar
           <div className="p-2 rounded-md bg-muted/50 border text-center">
             <div className="flex items-center justify-center gap-1.5 text-green-600 dark:text-green-400">
               <Zap className="w-4 h-4" />
-              <span className="text-xl font-bold">${stats.avgCost.toFixed(2)}</span>
+              <span className={cn('text-xl font-bold', privacyMode && PRIVACY_BLUR_CLASS)}>
+                ${stats.avgCost.toFixed(2)}
+              </span>
             </div>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
               Avg Cost/Session
@@ -132,7 +137,7 @@ export function SessionStatsCard({ data, isLoading, className }: SessionStatsCar
                     {formatDistanceToNow(new Date(session.lastActivity), { addSuffix: true })}
                   </span>
                 </div>
-                <div className="text-right shrink-0 ml-2">
+                <div className={cn('text-right shrink-0 ml-2', privacyMode && PRIVACY_BLUR_CLASS)}>
                   <div className="font-mono">${session.cost.toFixed(2)}</div>
                   <div className="text-[10px] text-muted-foreground">
                     {formatCompact(session.inputTokens + session.outputTokens)} toks

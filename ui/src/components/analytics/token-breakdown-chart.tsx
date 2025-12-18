@@ -2,7 +2,7 @@
  * Token Breakdown Chart Component
  *
  * Displays token usage breakdown by type (input, output, cache).
- * Shows stacked bar chart with cost breakdown.
+ * Shows stacked bar chart with cost breakdown. Respects privacy mode.
  */
 
 import { useMemo } from 'react';
@@ -19,6 +19,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import type { TokenBreakdown } from '@/hooks/use-usage';
 import { cn } from '@/lib/utils';
+import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 
 interface TokenBreakdownChartProps {
   data?: TokenBreakdown;
@@ -34,6 +35,8 @@ const COLORS = {
 };
 
 export function TokenBreakdownChart({ data, isLoading, className }: TokenBreakdownChartProps) {
+  const { privacyMode } = usePrivacy();
+
   const chartData = useMemo(() => {
     if (!data) return [];
 
@@ -151,7 +154,12 @@ export function TokenBreakdownChart({ data, isLoading, className }: TokenBreakdo
       </ResponsiveContainer>
 
       {/* Cost breakdown summary */}
-      <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+      <div
+        className={cn(
+          'mt-4 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs',
+          privacyMode && PRIVACY_BLUR_CLASS
+        )}
+      >
         {chartData.map((item) => (
           <div key={item.name} className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.fill }} />

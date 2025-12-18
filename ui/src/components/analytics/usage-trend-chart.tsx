@@ -3,6 +3,7 @@
  *
  * Displays usage trends over time with tokens and cost.
  * Supports daily, hourly, and monthly granularity with interactive tooltips.
+ * Respects privacy mode to blur sensitive data.
  */
 
 import { useMemo } from 'react';
@@ -19,6 +20,7 @@ import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { DailyUsage, HourlyUsage } from '@/hooks/use-usage';
+import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 
 type ChartData = DailyUsage | HourlyUsage;
 
@@ -35,6 +37,8 @@ export function UsageTrendChart({
   granularity = 'daily',
   className,
 }: UsageTrendChartProps) {
+  const { privacyMode } = usePrivacy();
+
   const chartData = useMemo(() => {
     if (!data || data.length === 0) return [];
 
@@ -66,6 +70,35 @@ export function UsageTrendChart({
     );
   }
 
+  // Custom tick component for privacy-aware axis labels
+  const PrivacyTick = ({
+    x,
+    y,
+    payload,
+    isRight,
+  }: {
+    x: number;
+    y: number;
+    payload: { value: string | number };
+    isRight?: boolean;
+  }) => {
+    const displayValue = isRight ? `$${payload.value}` : formatNumber(Number(payload.value));
+
+    return (
+      <text
+        x={x}
+        y={y}
+        dy={4}
+        textAnchor={isRight ? 'start' : 'end'}
+        fontSize={12}
+        fill="currentColor"
+        className={cn('fill-muted-foreground', privacyMode && 'blur-[4px]')}
+      >
+        {displayValue}
+      </text>
+    );
+  };
+
   return (
     <div className={cn('w-full h-full', className)}>
       <ResponsiveContainer width="100%" height="100%">
@@ -93,19 +126,17 @@ export function UsageTrendChart({
           <YAxis
             yAxisId="left"
             orientation="left"
-            tick={{ fontSize: 12 }}
+            tick={(props) => <PrivacyTick {...props} isRight={false} />}
             tickLine={false}
             axisLine={{ className: 'stroke-muted' }}
-            tickFormatter={(value) => formatNumber(value)}
           />
 
           <YAxis
             yAxisId="right"
             orientation="right"
-            tick={{ fontSize: 12 }}
+            tick={(props) => <PrivacyTick {...props} isRight={true} />}
             tickLine={false}
             axisLine={{ className: 'stroke-muted' }}
-            tickFormatter={(value) => `$${value}`}
           />
 
           <Tooltip
@@ -117,7 +148,11 @@ export function UsageTrendChart({
                 <div className="rounded-lg border bg-background p-3 shadow-lg">
                   <p className="font-medium mb-2">{label}</p>
                   {payload.map((entry, index) => (
-                    <p key={index} className="text-sm" style={{ color: entry.color }}>
+                    <p
+                      key={index}
+                      className={cn('text-sm', privacyMode && PRIVACY_BLUR_CLASS)}
+                      style={{ color: entry.color }}
+                    >
                       {entry.name}:{' '}
                       {entry.name === 'Tokens'
                         ? formatNumber(Number(entry.value) || 0)
@@ -125,7 +160,12 @@ export function UsageTrendChart({
                     </p>
                   ))}
                   {'requests' in tooltipData && (
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <p
+                      className={cn(
+                        'text-sm text-muted-foreground mt-1',
+                        privacyMode && PRIVACY_BLUR_CLASS
+                      )}
+                    >
                       Requests: {tooltipData.requests}
                     </p>
                   )}

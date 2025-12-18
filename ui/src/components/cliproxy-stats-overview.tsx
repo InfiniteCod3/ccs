@@ -8,6 +8,7 @@
  * - Token usage with cost estimation
  * - Model breakdown with usage distribution
  * - Session history
+ * Respects privacy mode to blur sensitive data.
  */
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,12 +27,14 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCliproxyStats, useCliproxyStatus } from '@/hooks/use-cliproxy-stats';
+import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 
 interface CliproxyStatsOverviewProps {
   className?: string;
 }
 
 export function CliproxyStatsOverview({ className }: CliproxyStatsOverviewProps) {
+  const { privacyMode } = usePrivacy();
   const { data: status, isLoading: statusLoading } = useCliproxyStatus();
   const { data: stats, isLoading: statsLoading, error } = useCliproxyStats(status?.running);
 
@@ -216,8 +219,15 @@ export function CliproxyStatsOverview({ className }: CliproxyStatsOverviewProps)
             <div className="flex items-start justify-between">
               <div className="space-y-1">
                 <p className="text-xs font-medium text-muted-foreground">Total Tokens</p>
-                <p className="text-2xl font-bold">{formatNumber(totalTokens)}</p>
-                <p className="text-[10px] text-muted-foreground">
+                <p className={cn('text-2xl font-bold', privacyMode && PRIVACY_BLUR_CLASS)}>
+                  {formatNumber(totalTokens)}
+                </p>
+                <p
+                  className={cn(
+                    'text-[10px] text-muted-foreground',
+                    privacyMode && PRIVACY_BLUR_CLASS
+                  )}
+                >
                   ~${estimateCost(totalTokens).toFixed(2)} estimated
                 </p>
               </div>

@@ -13,20 +13,6 @@ import { getProviderSettingsPath, getClaudeEnvVars } from './config-generator';
 import { CLIProxyProvider } from './types';
 import { initUI, color, bold, dim, ok, info, header } from '../utils/ui';
 
-/**
- * Check if model is a Claude model routed via Antigravity
- * Claude models require MAX_THINKING_TOKENS < 8192 for thinking to work
- */
-function isClaudeModel(modelId: string): boolean {
-  return modelId.includes('claude');
-}
-
-/**
- * Max thinking tokens for Claude models via Antigravity
- * Must be < 8192 due to Google protocol conversion limitations
- */
-const CLAUDE_MAX_THINKING_TOKENS = '8191';
-
 /** CCS directory */
 const CCS_DIR = path.join(process.env.HOME || process.env.USERPROFILE || '', '.ccs');
 
@@ -163,8 +149,7 @@ export async function configureProviderModel(
 
   // Build settings with selective merge:
   // - Preserve ALL user settings (top-level and env vars)
-  // - Only update CCS-controlled fields (model selection + thinking toggle for Claude)
-  const isClaude = isClaudeModel(selectedModel);
+  // - Only update CCS-controlled fields (model selection)
 
   // CCS-controlled env vars (always override with our values)
   const ccsControlledEnv: Record<string, string> = {
@@ -176,21 +161,11 @@ export async function configureProviderModel(
     ANTHROPIC_DEFAULT_HAIKU_MODEL: baseEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || '',
   };
 
-  // Claude models require MAX_THINKING_TOKENS < 8192 for thinking to work
-  if (isClaude) {
-    ccsControlledEnv.MAX_THINKING_TOKENS = CLAUDE_MAX_THINKING_TOKENS;
-  }
-
   // Merge: user env vars (preserved) + CCS controlled (override)
   const mergedEnv = {
     ...existingEnv,
     ...ccsControlledEnv,
   };
-
-  // Remove MAX_THINKING_TOKENS when switching away from Claude model
-  if (!isClaude && mergedEnv.MAX_THINKING_TOKENS) {
-    delete mergedEnv.MAX_THINKING_TOKENS;
-  }
 
   // Build final settings: preserve user top-level settings + update env
   const settings: Record<string, unknown> = {
@@ -221,15 +196,6 @@ export async function configureProviderModel(
     const reason = selectedEntry.deprecationReason || 'This model is deprecated';
     console.error(dim(`     ${reason}`));
     console.error(dim('     Consider using a non-deprecated model for better compatibility.'));
-  }
-
-  // Show info for Claude models about thinking token limit
-  if (isClaude) {
-    console.error('');
-    console.error(
-      info(`MAX_THINKING_TOKENS set to ${CLAUDE_MAX_THINKING_TOKENS} (required < 8192)`)
-    );
-    console.error(dim('     Google protocol conversion requires this limit for thinking to work.'));
   }
   console.error('');
 

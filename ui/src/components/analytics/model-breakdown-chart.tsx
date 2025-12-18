@@ -2,7 +2,7 @@
  * Model Breakdown Chart Component
  *
  * Displays usage distribution by model using pie chart.
- * Shows tokens, cost, and percentage breakdown.
+ * Shows tokens, cost, and percentage breakdown. Respects privacy mode.
  */
 
 import { useMemo } from 'react';
@@ -10,6 +10,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ModelUsage } from '@/hooks/use-usage';
 import { cn, getModelColor } from '@/lib/utils';
+import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 
 interface ModelBreakdownChartProps {
   data: ModelUsage[];
@@ -18,6 +19,8 @@ interface ModelBreakdownChartProps {
 }
 
 export function ModelBreakdownChart({ data, isLoading, className }: ModelBreakdownChartProps) {
+  const { privacyMode } = usePrivacy();
+
   const chartData = useMemo(() => {
     if (!data || data.length === 0) return [];
 
@@ -54,10 +57,12 @@ export function ModelBreakdownChart({ data, isLoading, className }: ModelBreakdo
     return (
       <div className="rounded-lg border bg-background p-2 shadow-lg text-xs">
         <p className="font-medium mb-1">{item.name}</p>
-        <p className="text-muted-foreground">
+        <p className={cn('text-muted-foreground', privacyMode && PRIVACY_BLUR_CLASS)}>
           {formatNumber(item.value)} ({item.percentage.toFixed(1)}%)
         </p>
-        <p className="text-muted-foreground">${item.cost.toFixed(4)}</p>
+        <p className={cn('text-muted-foreground', privacyMode && PRIVACY_BLUR_CLASS)}>
+          ${item.cost.toFixed(4)}
+        </p>
       </div>
     );
   };

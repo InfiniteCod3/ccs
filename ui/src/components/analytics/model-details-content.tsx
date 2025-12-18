@@ -1,12 +1,15 @@
 import { Badge } from '@/components/ui/badge';
 import { ArrowDownRight, ArrowUpRight, Database, Gauge, Sparkles } from 'lucide-react';
 import type { ModelUsage } from '@/hooks/use-usage';
+import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
+import { cn } from '@/lib/utils';
 
 interface ModelDetailsContentProps {
   model: ModelUsage;
 }
 
 export function ModelDetailsContent({ model }: ModelDetailsContentProps) {
+  const { privacyMode } = usePrivacy();
   const ioRatioStatus = getIoRatioStatus(model.ioRatio);
 
   return (
@@ -32,11 +35,15 @@ export function ModelDetailsContent({ model }: ModelDetailsContentProps) {
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-2">
         <div className="p-2 rounded-md bg-muted/50 border text-center">
-          <p className="text-lg font-bold">${model.cost.toFixed(2)}</p>
+          <p className={cn('text-lg font-bold', privacyMode && PRIVACY_BLUR_CLASS)}>
+            ${model.cost.toFixed(2)}
+          </p>
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Cost</p>
         </div>
         <div className="p-2 rounded-md bg-muted/50 border text-center">
-          <p className="text-lg font-bold">{formatCompactNumber(model.tokens)}</p>
+          <p className={cn('text-lg font-bold', privacyMode && PRIVACY_BLUR_CLASS)}>
+            {formatCompactNumber(model.tokens)}
+          </p>
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Tokens</p>
         </div>
       </div>
@@ -46,7 +53,7 @@ export function ModelDetailsContent({ model }: ModelDetailsContentProps) {
         <h5 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
           Token Breakdown
         </h5>
-        <div className="space-y-1">
+        <div className={cn('space-y-1', privacyMode && PRIVACY_BLUR_CLASS)}>
           <TokenRow
             label="Input"
             tokens={model.inputTokens}

@@ -115,7 +115,7 @@ describe('Model Config', () => {
           ANTHROPIC_MODEL: 'gemini-claude-opus-4-5-thinking',
           ANTHROPIC_DEFAULT_OPUS_MODEL: 'gemini-claude-opus-4-5-thinking',
           ANTHROPIC_DEFAULT_SONNET_MODEL: 'gemini-claude-opus-4-5-thinking',
-          ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gemini-2.5-flash',
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gemini-3-flash-preview',
         },
       };
 
@@ -138,7 +138,7 @@ describe('Model Config', () => {
           ANTHROPIC_MODEL: 'gemini-claude-opus-4-5-thinking',
           ANTHROPIC_DEFAULT_OPUS_MODEL: 'gemini-claude-opus-4-5-thinking',
           ANTHROPIC_DEFAULT_SONNET_MODEL: 'gemini-claude-opus-4-5-thinking',
-          ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gemini-2.5-flash',
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gemini-3-flash-preview',
         },
       };
 

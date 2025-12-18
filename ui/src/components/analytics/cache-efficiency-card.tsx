@@ -2,7 +2,7 @@
  * Cache Efficiency Card Component
  *
  * Displays cache usage metrics including hit rate, savings estimate,
- * and cache read/write breakdown.
+ * and cache read/write breakdown. Respects privacy mode to blur sensitive data.
  */
 
 import { useMemo } from 'react';
@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Database, TrendingUp, Zap } from 'lucide-react';
 import type { UsageSummary } from '@/hooks/use-usage';
 import { cn } from '@/lib/utils';
+import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 
 interface CacheEfficiencyCardProps {
   data: UsageSummary | undefined;
@@ -19,6 +20,8 @@ interface CacheEfficiencyCardProps {
 }
 
 export function CacheEfficiencyCard({ data, isLoading, className }: CacheEfficiencyCardProps) {
+  const { privacyMode } = usePrivacy();
+
   const metrics = useMemo(() => {
     if (!data) return null;
 
@@ -93,7 +96,9 @@ export function CacheEfficiencyCard({ data, isLoading, className }: CacheEfficie
         <div className="text-center">
           <div className="flex items-center justify-center gap-1.5 text-emerald-600 dark:text-emerald-400">
             <TrendingUp className="w-5 h-5" />
-            <span className="text-2xl font-bold">${metrics.estimatedSavings.toFixed(2)}</span>
+            <span className={cn('text-2xl font-bold', privacyMode && PRIVACY_BLUR_CLASS)}>
+              ${metrics.estimatedSavings.toFixed(2)}
+            </span>
           </div>
           <p className="text-[11px] text-muted-foreground uppercase tracking-wider mt-0.5">
             Estimated Savings
@@ -106,21 +111,30 @@ export function CacheEfficiencyCard({ data, isLoading, className }: CacheEfficie
           <div className="p-2 rounded-md bg-muted/50 border text-center">
             <div className="flex items-center justify-center gap-1">
               <Zap className="w-3.5 h-3.5 text-amber-500" />
-              <span className="text-lg font-bold">{metrics.cacheHitRate.toFixed(0)}%</span>
+              <span className={cn('text-lg font-bold', privacyMode && PRIVACY_BLUR_CLASS)}>
+                {metrics.cacheHitRate.toFixed(0)}%
+              </span>
             </div>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Hit Rate</p>
           </div>
 
           {/* Cache Cost */}
           <div className="p-2 rounded-md bg-muted/50 border text-center">
-            <span className="text-lg font-bold">${metrics.cacheCost.toFixed(2)}</span>
+            <span className={cn('text-lg font-bold', privacyMode && PRIVACY_BLUR_CLASS)}>
+              ${metrics.cacheCost.toFixed(2)}
+            </span>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Cache Cost</p>
           </div>
         </div>
 
         {/* Cache breakdown bar */}
         <div className="space-y-1">
-          <div className="flex justify-between text-[10px] text-muted-foreground">
+          <div
+            className={cn(
+              'flex justify-between text-[10px] text-muted-foreground',
+              privacyMode && PRIVACY_BLUR_CLASS
+            )}
+          >
             <span>Reads: {formatCompact(metrics.totalCacheReads)}</span>
             <span>Writes: {formatCompact(metrics.totalCacheWrites)}</span>
           </div>

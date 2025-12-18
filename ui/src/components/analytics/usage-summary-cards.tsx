@@ -3,6 +3,7 @@
  *
  * Displays key metrics in a card grid layout.
  * Shows total tokens, cost, cache tokens, and average cost per day.
+ * Respects privacy mode to blur sensitive financial data.
  */
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DollarSign, Database, FileText, ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UsageSummary } from '@/hooks/use-usage';
+import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 
 interface UsageSummaryCardsProps {
   data?: UsageSummary;
@@ -17,6 +19,8 @@ interface UsageSummaryCardsProps {
 }
 
 export function UsageSummaryCards({ data, isLoading }: UsageSummaryCardsProps) {
+  const { privacyMode } = usePrivacy();
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
@@ -100,9 +104,20 @@ export function UsageSummaryCards({ data, isLoading }: UsageSummaryCardsProps) {
               <div className="flex items-center justify-between space-x-2">
                 <div className="space-y-1 min-w-0">
                   <p className="text-xs font-medium text-muted-foreground truncate">{card.title}</p>
-                  <p className="text-xl font-bold truncate">{card.format(card.value)}</p>
+                  <p
+                    className={cn('text-xl font-bold truncate', privacyMode && PRIVACY_BLUR_CLASS)}
+                  >
+                    {card.format(card.value)}
+                  </p>
                   {card.subtitle && (
-                    <p className="text-[10px] text-muted-foreground truncate">{card.subtitle}</p>
+                    <p
+                      className={cn(
+                        'text-[10px] text-muted-foreground truncate',
+                        privacyMode && PRIVACY_BLUR_CLASS
+                      )}
+                    >
+                      {card.subtitle}
+                    </p>
                   )}
                 </div>
                 <div className={cn('p-2 rounded-lg shrink-0', card.bgColor)}>

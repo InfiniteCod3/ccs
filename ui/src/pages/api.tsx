@@ -19,6 +19,7 @@ import {
   Server,
   ExternalLink,
   FileJson,
+  RefreshCw,
 } from 'lucide-react';
 import { ProfileEditor } from '@/components/profile-editor';
 import { ProfileCreateDialog } from '@/components/profile-create-dialog';
@@ -29,7 +30,7 @@ import { cn } from '@/lib/utils';
 import { CopyButton } from '@/components/ui/copy-button';
 
 export function ApiPage() {
-  const { data, isLoading } = useProfiles();
+  const { data, isLoading, isError, refetch } = useProfiles();
   const deleteMutation = useDeleteProfile();
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -111,6 +112,22 @@ export function ApiPage() {
         <ScrollArea className="flex-1">
           {isLoading ? (
             <div className="p-4 text-sm text-muted-foreground">Loading profiles...</div>
+          ) : isError ? (
+            <div className="p-4 text-center">
+              <div className="space-y-3 py-8">
+                <AlertCircle className="w-12 h-12 mx-auto text-destructive/50" />
+                <div>
+                  <p className="text-sm font-medium">Failed to load profiles</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Unable to fetch API profiles. Please try again.
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => refetch()}>
+                  <RefreshCw className="w-4 h-4 mr-1" />
+                  Retry
+                </Button>
+              </div>
+            </div>
           ) : filteredProfiles.length === 0 ? (
             <div className="p-4 text-center">
               {profiles.length === 0 ? (

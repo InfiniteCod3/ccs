@@ -791,13 +791,15 @@ export function CopilotConfigForm() {
         </div>
       </div>
 
-      {/* Split Layout (50% Left / 50% Right) */}
-      <div className="flex-1 grid grid-cols-2 divide-x overflow-hidden">
-        {/* Left Column: Friendly UI */}
-        <div className="flex flex-col overflow-hidden bg-muted/5">{renderFriendlyUI()}</div>
+      {/* Split Layout - Left panel constrained, Right panel flexible */}
+      <div className="flex-1 flex divide-x overflow-hidden">
+        {/* Left Column: Friendly UI - constrained width */}
+        <div className="w-[540px] shrink-0 flex flex-col overflow-hidden bg-muted/5">
+          {renderFriendlyUI()}
+        </div>
 
-        {/* Right Column: Raw Editor */}
-        <div className="flex flex-col overflow-hidden">
+        {/* Right Column: Raw Editor - takes remaining space */}
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
           <div className="px-6 py-2 bg-muted/30 border-b flex items-center gap-2 shrink-0 h-[45px]">
             <Code2 className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm font-medium text-muted-foreground">

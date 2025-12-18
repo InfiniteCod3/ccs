@@ -113,7 +113,7 @@ export function CopilotPage() {
   return (
     <div className="h-[calc(100vh-100px)] flex">
       {/* Left Sidebar - Status Overview */}
-      <div className="w-64 border-r flex flex-col bg-muted/30 shrink-0">
+      <div className="w-80 border-r flex flex-col bg-muted/30 shrink-0">
         {/* Header */}
         <div className="p-4 border-b bg-background">
           <div className="flex items-center justify-between mb-1">
@@ -229,7 +229,7 @@ export function CopilotPage() {
                 <div className="px-3 py-2 rounded-lg bg-muted/50 space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">Model</span>
-                    <span className="font-mono truncate max-w-[100px] text-[10px]">
+                    <span className="font-mono truncate max-w-[160px] text-[10px]">
                       {status?.model ?? 'N/A'}
                     </span>
                   </div>

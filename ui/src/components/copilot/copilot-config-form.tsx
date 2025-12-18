@@ -3,8 +3,8 @@
  *
  * Form for configuring GitHub Copilot integration settings.
  * Split-view layout matching CLIProxy provider editor:
- * - Left: Friendly UI with model mapping selectors
- * - Right: Raw JSON editor for copilot.settings.json
+ * - Left (50%): Friendly UI with model mapping selectors
+ * - Right (50%): Raw JSON editor for copilot.settings.json
  */
 
 import { useState, useMemo, useCallback, lazy, Suspense } from 'react';
@@ -637,8 +637,8 @@ export function CopilotConfigForm() {
         </div>
       </div>
 
-      {/* Split Layout (40% Left / 60% Right) */}
-      <div className="flex-1 grid grid-cols-[40%_60%] divide-x overflow-hidden">
+      {/* Split Layout (50% Left / 50% Right) */}
+      <div className="flex-1 grid grid-cols-2 divide-x overflow-hidden">
         {/* Left Column: Friendly UI */}
         <div className="flex flex-col overflow-hidden bg-muted/5">{renderFriendlyUI()}</div>
 

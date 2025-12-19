@@ -7,6 +7,9 @@
 import ProfileRegistry from '../profile-registry';
 import { InstanceManager } from '../../management/instance-manager';
 
+// Re-export for backward compatibility
+export { formatRelativeTime } from '../../utils/time';
+
 /**
  * Command arguments parsed from CLI
  */
@@ -60,21 +63,4 @@ export function parseArgs(args: string[]): AuthCommandArgs {
     json: args.includes('--json'),
     yes: args.includes('--yes') || args.includes('-y'),
   };
-}
-
-/**
- * Format relative time (e.g., "2h ago", "1d ago")
- */
-export function formatRelativeTime(date: Date): string {
-  const now = Date.now();
-  const diff = now - date.getTime();
-
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-
-  if (days > 0) return `${days}d ago`;
-  if (hours > 0) return `${hours}h ago`;
-  if (minutes > 0) return `${minutes}m ago`;
-  return 'just now';
 }

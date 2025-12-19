@@ -6,6 +6,9 @@
 // UI utilities (main export)
 export * from './ui';
 
+// Time utilities
+export * from './time';
+
 // Shell execution
 export { execClaude, escapeShellArg } from './shell-executor';
 

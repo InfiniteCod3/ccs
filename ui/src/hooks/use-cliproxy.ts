@@ -261,3 +261,15 @@ export function useStopProxy() {
     },
   });
 }
+
+// ==================== Update Check ====================
+
+export function useCliproxyUpdateCheck() {
+  return useQuery({
+    queryKey: ['cliproxy-update-check'],
+    queryFn: () => api.cliproxy.updateCheck(),
+    staleTime: 60 * 60 * 1000, // 1 hour (matches backend cache)
+    refetchInterval: 60 * 60 * 1000, // Refresh every hour
+    refetchOnWindowFocus: false, // Don't refresh on window focus (save API calls)
+  });
+}

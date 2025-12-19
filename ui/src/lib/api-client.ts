@@ -190,6 +190,14 @@ export interface ProxyStopResult {
   error?: string;
 }
 
+/** Result from checking for CLIProxyAPI updates */
+export interface CliproxyUpdateCheckResult {
+  hasUpdate: boolean;
+  currentVersion: string;
+  latestVersion: string;
+  fromCache: boolean;
+}
+
 // API
 export const api = {
   profiles: {
@@ -225,6 +233,7 @@ export const api = {
     proxyStatus: () => request<ProxyProcessStatus>('/cliproxy/proxy-status'),
     proxyStart: () => request<ProxyStartResult>('/cliproxy/proxy-start', { method: 'POST' }),
     proxyStop: () => request<ProxyStopResult>('/cliproxy/proxy-stop', { method: 'POST' }),
+    updateCheck: () => request<CliproxyUpdateCheckResult>('/cliproxy/update-check'),
 
     // Stats and models for Overview tab
     stats: () => request<{ usage: Record<string, unknown> }>('/cliproxy/usage'),

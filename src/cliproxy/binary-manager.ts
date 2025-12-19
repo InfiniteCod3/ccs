@@ -995,6 +995,23 @@ export async function fetchLatestCliproxyVersion(): Promise<string> {
   return result.latestVersion;
 }
 
+/** Update check result for API response */
+export interface CliproxyUpdateCheckResult {
+  hasUpdate: boolean;
+  currentVersion: string;
+  latestVersion: string;
+  fromCache: boolean;
+}
+
+/**
+ * Check for CLIProxyAPI binary updates
+ * @returns Update check result with version info
+ */
+export async function checkCliproxyUpdate(): Promise<CliproxyUpdateCheckResult> {
+  const manager = new BinaryManager();
+  return manager.checkForUpdates();
+}
+
 /**
  * Get path to version pin file
  * @returns Absolute path to .version-pin file

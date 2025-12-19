@@ -1,3 +1,11 @@
+## [6.7.0-dev.2](https://github.com/kaitranntt/ccs/compare/v6.7.0-dev.1...v6.7.0-dev.2) (2025-12-19)
+
+### Bug Fixes
+
+* **cliproxy:** include BASE_URL and AUTH_TOKEN when applying presets ([598454c](https://github.com/kaitranntt/ccs/commit/598454c931267082ba80c4ef426d0ef2c0370f55))
+* **cliproxy:** prevent variant names matching reserved provider names ([7ea64bd](https://github.com/kaitranntt/ccs/commit/7ea64bdb4392d8cd41bc871892466d30c50b58fd))
+* **web-server:** add comprehensive reserved name validation ([2373100](https://github.com/kaitranntt/ccs/commit/2373100c177654910922c6ef0e5ffc7cfe087b26))
+
 ## [6.7.0-dev.1](https://github.com/kaitranntt/ccs/compare/v6.6.2-dev.3...v6.7.0-dev.1) (2025-12-19)
 
 ### Features

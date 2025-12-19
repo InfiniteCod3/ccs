@@ -17,6 +17,7 @@ const REQUEST_TIMEOUT = 5000; // 5 seconds
 interface UpdateCache {
   last_check: number;
   latest_version: string | null;
+  dev_version: string | null; // Version for @dev tag
   dismissed_version: string | null;
 }
 
@@ -193,13 +194,18 @@ function fetchVersionFromNpmTag(tag: 'latest' | 'dev'): Promise<string | null> {
 export function readCache(): UpdateCache {
   try {
     if (!fs.existsSync(UPDATE_CHECK_FILE)) {
-      return { last_check: 0, latest_version: null, dismissed_version: null };
+      return { last_check: 0, latest_version: null, dev_version: null, dismissed_version: null };
     }
 
     const data = fs.readFileSync(UPDATE_CHECK_FILE, 'utf8');
-    return JSON.parse(data) as UpdateCache;
+    const parsed = JSON.parse(data) as UpdateCache;
+    // Ensure dev_version exists (backward compatibility)
+    if (parsed.dev_version === undefined) {
+      parsed.dev_version = null;
+    }
+    return parsed;
   } catch {
-    return { last_check: 0, latest_version: null, dismissed_version: null };
+    return { last_check: 0, latest_version: null, dev_version: null, dismissed_version: null };
   }
 }
 
@@ -234,18 +240,31 @@ export async function checkForUpdates(
   const cache = readCache();
   const now = Date.now();
 
-  // Check if we should check for updates
-  if (!force && now - cache.last_check < CHECK_INTERVAL) {
-    // Use cached result if available
-    if (
-      cache.latest_version &&
-      compareVersionsWithPrerelease(cache.latest_version, currentVersion) > 0
-    ) {
+  // Get cached version for the target tag
+  const cachedVersion = targetTag === 'dev' ? cache.dev_version : cache.latest_version;
+
+  // Check if we should check for updates (only use cache for same-tag checks)
+  if (!force && now - cache.last_check < CHECK_INTERVAL && cachedVersion) {
+    // Use cached result if available for this tag
+    if (compareVersionsWithPrerelease(cachedVersion, currentVersion) > 0) {
       // Don't show if user dismissed this version
-      if (cache.dismissed_version === cache.latest_version) {
+      if (cache.dismissed_version === cachedVersion) {
         return { status: 'no_update', reason: 'dismissed' };
       }
-      return { status: 'update_available', latest: cache.latest_version, current: currentVersion };
+      return { status: 'update_available', latest: cachedVersion, current: currentVersion };
+    }
+    // Check for channel switch: if current is on different channel than target
+    // Only trigger if target version matches the target channel type
+    const currentIsDevChannel = currentVersion.includes('-dev.');
+    const targetIsDevChannel = targetTag === 'dev';
+    const cachedIsDevVersion = cachedVersion.includes('-dev.');
+    if (
+      currentIsDevChannel !== targetIsDevChannel &&
+      cachedIsDevVersion === targetIsDevChannel &&
+      cachedVersion !== currentVersion
+    ) {
+      // Channel switch - treat as update available
+      return { status: 'update_available', latest: cachedVersion, current: currentVersion };
     }
     return { status: 'no_update', reason: 'cached' };
   }
@@ -271,10 +290,14 @@ export async function checkForUpdates(
     if (!latestVersion) fetchError = 'github_api_error';
   }
 
-  // Update cache
+  // Update cache with tag-specific version
   cache.last_check = now;
   if (latestVersion) {
-    cache.latest_version = latestVersion;
+    if (targetTag === 'dev') {
+      cache.dev_version = latestVersion;
+    } else {
+      cache.latest_version = latestVersion;
+    }
   }
   writeCache(cache);
 
@@ -288,12 +311,36 @@ export async function checkForUpdates(
   }
 
   // Check if update available
-  if (latestVersion && compareVersionsWithPrerelease(latestVersion, currentVersion) > 0) {
-    // Don't show if user dismissed this version
-    if (cache.dismissed_version === latestVersion) {
-      return { status: 'no_update', reason: 'dismissed' };
+  if (latestVersion) {
+    const versionComparison = compareVersionsWithPrerelease(latestVersion, currentVersion);
+
+    // Update available if newer version
+    if (versionComparison > 0) {
+      // Don't show if user dismissed this version
+      if (cache.dismissed_version === latestVersion) {
+        return { status: 'no_update', reason: 'dismissed' };
+      }
+      return { status: 'update_available', latest: latestVersion, current: currentVersion };
     }
-    return { status: 'update_available', latest: latestVersion, current: currentVersion };
+
+    // Check for channel switch (stable <-> dev)
+    // Only trigger if: switching channels AND target version is on the target channel
+    const currentIsDevChannel = currentVersion.includes('-dev.');
+    const targetIsDevChannel = targetTag === 'dev';
+    const latestIsDevVersion = latestVersion.includes('-dev.');
+
+    // Channel switch is valid only when:
+    // 1. User is switching channels (current != target)
+    // 2. Target version matches the target channel type
+    // 3. Version is different from current
+    if (
+      currentIsDevChannel !== targetIsDevChannel &&
+      latestIsDevVersion === targetIsDevChannel &&
+      latestVersion !== currentVersion
+    ) {
+      // Channel switch - treat as update even if "downgrade"
+      return { status: 'update_available', latest: latestVersion, current: currentVersion };
+    }
   }
 
   return { status: 'no_update', reason: 'latest' };

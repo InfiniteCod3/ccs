@@ -365,15 +365,17 @@ describe('Beta Channel Implementation (Phase 3)', function () {
       const cachePath = path.join(os.homedir(), '.ccs', 'cache', 'update-check.json');
       const cacheData = JSON.parse(mockFileSystem[cachePath]);
 
-      assert.strictEqual(cacheData.latest_version, '5.5.0');
+      // Dev versions are now stored in dev_version field (not latest_version)
+      assert.strictEqual(cacheData.dev_version, '5.5.0');
       assert(cacheData.last_check > 0, 'should update timestamp');
     });
 
     it('should use cached result when within interval', async function () {
-      // Set up cache with recent check
+      // Set up cache with recent check - use dev_version for dev channel
       const cacheData = {
         last_check: Date.now() - 1000, // 1 second ago
-        latest_version: '5.5.0',
+        latest_version: null,
+        dev_version: '5.5.0',
         dismissed_version: null
       };
       mockFileSystem[path.join(os.homedir(), '.ccs', 'cache', 'update-check.json')] = JSON.stringify(cacheData);
@@ -475,10 +477,11 @@ describe('Beta Channel Implementation (Phase 3)', function () {
     });
 
     it('should handle dismissed versions correctly', async function () {
-      // Set up cache with dismissed version
+      // Set up cache with dismissed version - use dev_version for dev channel
       const cacheData = {
         last_check: Date.now() - 1000,
-        latest_version: '5.5.0',
+        latest_version: null,
+        dev_version: '5.5.0',
         dismissed_version: '5.5.0'
       };
       mockFileSystem[path.join(os.homedir(), '.ccs', 'cache', 'update-check.json')] = JSON.stringify(cacheData);

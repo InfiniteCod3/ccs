@@ -70,6 +70,8 @@ const devConfig = {
       '@semantic-release/github',
       {
         prerelease: true,
+        // Disable automatic success comment - custom step in dev-release.yml handles this
+        successComment: false,
       },
     ],
     [

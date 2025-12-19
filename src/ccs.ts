@@ -499,6 +499,12 @@ async function main(): Promise<void> {
         const globalEnvConfig = getGlobalEnvConfig();
         const globalEnv = globalEnvConfig.enabled ? globalEnvConfig.env : {};
 
+        // Log global env injection for visibility (debug mode only)
+        if (globalEnvConfig.enabled && Object.keys(globalEnv).length > 0 && process.env.CCS_DEBUG) {
+          const envNames = Object.keys(globalEnv).join(', ');
+          console.error(`[i] Global env: ${envNames}`);
+        }
+
         // CRITICAL: Load settings and explicitly set ANTHROPIC_* env vars
         // to prevent inheriting stale values from previous CLIProxy sessions.
         // Environment variables take precedence over --settings file values,

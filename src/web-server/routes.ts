@@ -66,6 +66,7 @@ import { getWebSearchConfig } from '../config/unified-config-loader';
 import type { WebSearchConfig } from '../config/unified-config-types';
 import { isUnifiedConfig } from '../config/unified-config-types';
 import { isSensitiveKey, maskSensitiveValue } from '../utils/sensitive-keys';
+import { isReservedName, RESERVED_PROFILE_NAMES } from '../config/reserved-names';
 import {
   getWebSearchReadiness,
   getGeminiCliStatus,
@@ -275,6 +276,15 @@ apiRoutes.post('/profiles', (req: Request, res: Response): void => {
     return;
   }
 
+  // Validate reserved names
+  if (isReservedName(name)) {
+    res.status(400).json({
+      error: `Profile name '${name}' is reserved`,
+      reserved: RESERVED_PROFILE_NAMES,
+    });
+    return;
+  }
+
   const config = readConfigSafe();
 
   if (config.profiles[name]) {
@@ -378,6 +388,15 @@ apiRoutes.post('/cliproxy', (req: Request, res: Response): void => {
     return;
   }
 
+  // Reject reserved names as variant names (prevents collision with built-in providers)
+  if (isReservedName(name)) {
+    res.status(400).json({
+      error: `Cannot use reserved name '${name}' as variant name`,
+      reserved: RESERVED_PROFILE_NAMES,
+    });
+    return;
+  }
+
   const config = readConfigSafe();
   config.cliproxy = config.cliproxy || {};
 
@@ -472,10 +491,13 @@ apiRoutes.delete('/cliproxy/:name', (req: Request, res: Response): void => {
     return;
   }
 
-  // Delete settings file
-  const settingsPath = path.join(getCcsDir(), `${name}.settings.json`);
-  if (fs.existsSync(settingsPath)) {
-    fs.unlinkSync(settingsPath);
+  // Never delete settings files for reserved provider names (safety guard)
+  if (!isReservedName(name)) {
+    // Only delete settings file for non-reserved variant names
+    const settingsPath = path.join(getCcsDir(), `${name}.settings.json`);
+    if (fs.existsSync(settingsPath)) {
+      fs.unlinkSync(settingsPath);
+    }
   }
 
   delete config.cliproxy[name];
@@ -781,6 +803,7 @@ apiRoutes.get('/settings/:profile/raw', (req: Request, res: Response): void => {
 
 /**
  * PUT /api/settings/:profile - Update settings with conflict detection and backup
+ * Creates the settings file if it doesn't exist (upsert behavior)
  */
 apiRoutes.put('/settings/:profile', (req: Request, res: Response): void => {
   const { profile } = req.params;
@@ -788,29 +811,36 @@ apiRoutes.put('/settings/:profile', (req: Request, res: Response): void => {
   const ccsDir = getCcsDir();
   const settingsPath = path.join(ccsDir, `${profile}.settings.json`);
 
-  if (!fs.existsSync(settingsPath)) {
-    res.status(404).json({ error: 'Settings not found' });
-    return;
+  const fileExists = fs.existsSync(settingsPath);
+
+  // Only check conflict if file exists and expectedMtime was provided
+  if (fileExists && expectedMtime) {
+    const stat = fs.statSync(settingsPath);
+    if (stat.mtime.getTime() !== expectedMtime) {
+      res.status(409).json({
+        error: 'File modified externally',
+        currentMtime: stat.mtime.getTime(),
+      });
+      return;
+    }
   }
 
-  // Conflict detection
-  const stat = fs.statSync(settingsPath);
-  if (expectedMtime && stat.mtime.getTime() !== expectedMtime) {
-    res.status(409).json({
-      error: 'File modified externally',
-      currentMtime: stat.mtime.getTime(),
-    });
-    return;
+  // Create backup only if file exists
+  let backupPath: string | undefined;
+  if (fileExists) {
+    const backupDir = path.join(ccsDir, 'backups');
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    backupPath = path.join(backupDir, `${profile}.${timestamp}.settings.json`);
+    fs.copyFileSync(settingsPath, backupPath);
   }
 
-  // Create backup
-  const backupDir = path.join(ccsDir, 'backups');
-  if (!fs.existsSync(backupDir)) {
-    fs.mkdirSync(backupDir, { recursive: true });
+  // Ensure directory exists for new files
+  if (!fileExists) {
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
   }
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupPath = path.join(backupDir, `${profile}.${timestamp}.settings.json`);
-  fs.copyFileSync(settingsPath, backupPath);
 
   // Write new settings atomically
   const tempPath = settingsPath + '.tmp';
@@ -822,6 +852,7 @@ apiRoutes.put('/settings/:profile', (req: Request, res: Response): void => {
     profile,
     mtime: newStat.mtime.getTime(),
     backupPath,
+    created: !fileExists,
   });
 });
 
@@ -1590,6 +1621,14 @@ apiRoutes.post('/cliproxy/openai-compat', (req: Request, res: Response): void =>
     // Validation
     if (!name || typeof name !== 'string') {
       res.status(400).json({ error: 'name is required' });
+      return;
+    }
+    // Validate reserved names
+    if (isReservedName(name)) {
+      res.status(400).json({
+        error: `Provider name '${name}' is reserved`,
+        reserved: RESERVED_PROFILE_NAMES,
+      });
       return;
     }
     if (!baseUrl || typeof baseUrl !== 'string') {

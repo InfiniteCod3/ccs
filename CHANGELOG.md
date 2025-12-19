@@ -1,3 +1,9 @@
+## [6.7.0-dev.4](https://github.com/kaitranntt/ccs/compare/v6.7.0-dev.3...v6.7.0-dev.4) (2025-12-19)
+
+### Bug Fixes
+
+* **cliproxy:** prevent port race condition with unified detection and startup lock ([96f17e3](https://github.com/kaitranntt/ccs/commit/96f17e3afba93288b041f6c2883753692b4e9ca1))
+
 ## [6.7.0-dev.3](https://github.com/kaitranntt/ccs/compare/v6.7.0-dev.2...v6.7.0-dev.3) (2025-12-19)
 
 ### Features

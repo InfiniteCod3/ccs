@@ -31,6 +31,7 @@ import { useCopilot, type CopilotModel, type CopilotPlanTier } from '@/hooks/use
 import { Loader2, Save, Code2, X, Info, RefreshCw, Sparkles, Zap, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { GlobalEnvIndicator } from '@/components/global-env-indicator';
 
 // Lazy load CodeEditor
 const CodeEditor = lazy(() =>
@@ -726,7 +727,7 @@ export function CopilotConfigForm() {
             Invalid JSON syntax
           </div>
         )}
-        <div className="flex-1 overflow-hidden px-6 pb-6 pt-4">
+        <div className="flex-1 overflow-hidden px-6 pb-4 pt-4">
           <div className="h-full border rounded-md overflow-hidden bg-background">
             <CodeEditor
               value={rawJsonContent}
@@ -734,6 +735,12 @@ export function CopilotConfigForm() {
               language="json"
               minHeight="100%"
             />
+          </div>
+        </div>
+        {/* Global Env Indicator */}
+        <div className="mx-6 mb-4">
+          <div className="border rounded-md overflow-hidden">
+            <GlobalEnvIndicator profileEnv={rawSettings?.settings?.env} />
           </div>
         </div>
       </div>

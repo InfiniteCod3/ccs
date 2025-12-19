@@ -186,6 +186,28 @@ export interface CopilotConfig {
 }
 
 /**
+ * Global environment variables configuration.
+ * These env vars are injected into ALL non-Claude subscription profiles.
+ * Useful for disabling telemetry, bug commands, error reporting, etc.
+ */
+export interface GlobalEnvConfig {
+  /** Enable global env injection (default: true) */
+  enabled: boolean;
+  /** Environment variables to inject */
+  env: Record<string, string>;
+}
+
+/**
+ * Default global env vars for third-party profiles.
+ * These disable Claude Code telemetry/reporting since we're using proxy.
+ */
+export const DEFAULT_GLOBAL_ENV: Record<string, string> = {
+  DISABLE_BUG_COMMAND: '1',
+  DISABLE_ERROR_REPORTING: '1',
+  DISABLE_TELEMETRY: '1',
+};
+
+/**
  * WebSearch configuration.
  * Uses CLI tools (Gemini CLI, Grok CLI, OpenCode) for third-party profiles.
  * Third-party providers don't have server-side WebSearch access.
@@ -234,6 +256,8 @@ export interface UnifiedConfig {
   preferences: PreferencesConfig;
   /** WebSearch configuration */
   websearch?: WebSearchConfig;
+  /** Global environment variables for all non-Claude subscription profiles */
+  global_env?: GlobalEnvConfig;
   /** Copilot API configuration (GitHub Copilot proxy) */
   copilot?: CopilotConfig;
 }
@@ -306,6 +330,10 @@ export function createEmptyUnifiedConfig(): UnifiedConfig {
           timeout: 55,
         },
       },
+    },
+    global_env: {
+      enabled: true,
+      env: { ...DEFAULT_GLOBAL_ENV },
     },
     copilot: { ...DEFAULT_COPILOT_CONFIG },
   };

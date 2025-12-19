@@ -7,6 +7,7 @@
 
 import { spawn } from 'child_process';
 import { CopilotConfig } from '../config/unified-config-types';
+import { getGlobalEnvConfig } from '../config/unified-config-loader';
 import { checkAuthStatus, isCopilotApiInstalled } from './copilot-auth';
 import { isDaemonRunning, startDaemon } from './copilot-daemon';
 import { ensureCopilotApi } from './copilot-package-manager';
@@ -127,9 +128,14 @@ export async function executeCopilotProfile(
   // Generate environment for Claude
   const copilotEnv = generateCopilotEnv(config);
 
-  // Merge with current environment
+  // Get global env vars (DISABLE_TELEMETRY, etc.) for third-party profiles
+  const globalEnvConfig = getGlobalEnvConfig();
+  const globalEnv = globalEnvConfig.enabled ? globalEnvConfig.env : {};
+
+  // Merge with current environment (global env first, copilot overrides)
   const env = {
     ...process.env,
+    ...globalEnv,
     ...copilotEnv,
   };
 

@@ -11,6 +11,7 @@ import {
   displayWebSearchStatus,
   getWebSearchHookEnv,
 } from './utils/websearch-manager';
+import { getGlobalEnvConfig } from './config/unified-config-loader';
 
 // Import extracted command handlers
 import { handleVersionCommand } from './commands/version-command';
@@ -494,7 +495,11 @@ async function main(): Promise<void> {
         // Use --settings flag (backward compatible)
         const expandedSettingsPath = getSettingsPath(profileInfo.name);
         const webSearchEnv = getWebSearchHookEnv();
+        // Get global env vars (DISABLE_TELEMETRY, etc.) for third-party profiles
+        const globalEnvConfig = getGlobalEnvConfig();
+        const globalEnv = globalEnvConfig.enabled ? globalEnvConfig.env : {};
         const envVars: NodeJS.ProcessEnv = {
+          ...globalEnv,
           ...webSearchEnv,
           CCS_PROFILE_TYPE: 'settings', // Signal to WebSearch hook this is a third-party provider
         };

@@ -57,6 +57,7 @@ import {
   useDeletePreset,
 } from '@/hooks/use-cliproxy';
 import { cn } from '@/lib/utils';
+import { GlobalEnvIndicator } from '@/components/global-env-indicator';
 import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 
 // Lazy load CodeEditor
@@ -543,7 +544,7 @@ export function ProviderEditor({
             Invalid JSON syntax
           </div>
         )}
-        <div className="flex-1 overflow-hidden px-6 pb-6 pt-4">
+        <div className="flex-1 overflow-hidden px-6 pb-4 pt-4">
           <div className="h-full border rounded-md overflow-hidden bg-background">
             <CodeEditor
               value={rawJsonContent}
@@ -551,6 +552,12 @@ export function ProviderEditor({
               language="json"
               minHeight="100%"
             />
+          </div>
+        </div>
+        {/* Global Env Indicator */}
+        <div className="mx-6 mb-4">
+          <div className="border rounded-md overflow-hidden">
+            <GlobalEnvIndicator profileEnv={settings?.env} />
           </div>
         </div>
       </div>

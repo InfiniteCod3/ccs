@@ -1789,7 +1789,7 @@ import {
   getInstalledVersion as getCopilotInstalledVersion,
 } from '../copilot';
 import { DEFAULT_COPILOT_CONFIG } from '../config/unified-config-types';
-import { loadOrCreateUnifiedConfig } from '../config/unified-config-loader';
+import { loadOrCreateUnifiedConfig, getGlobalEnvConfig } from '../config/unified-config-loader';
 
 /**
  * GET /api/copilot/status - Get Copilot status (auth + daemon + install info)
@@ -2077,6 +2077,53 @@ apiRoutes.put('/copilot/settings/raw', (req: Request, res: Response): void => {
 
     const stat = fs.statSync(settingsPath);
     res.json({ success: true, mtime: stat.mtimeMs });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// ==================== Global Environment Variables ====================
+
+/**
+ * GET /api/global-env - Get global environment variables configuration
+ * Returns the global_env section from config.yaml
+ */
+apiRoutes.get('/global-env', (_req: Request, res: Response): void => {
+  try {
+    const config = getGlobalEnvConfig();
+    res.json(config);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * PUT /api/global-env - Update global environment variables configuration
+ * Updates the global_env section in config.yaml
+ */
+apiRoutes.put('/global-env', (req: Request, res: Response): void => {
+  try {
+    const { enabled, env } = req.body;
+    const config = loadOrCreateUnifiedConfig();
+
+    // Validate env is an object with string values
+    if (env !== undefined && typeof env === 'object' && env !== null) {
+      for (const [key, value] of Object.entries(env)) {
+        if (typeof value !== 'string') {
+          res.status(400).json({ error: `Invalid value for ${key}: must be a string` });
+          return;
+        }
+      }
+    }
+
+    // Update global_env section
+    config.global_env = {
+      enabled: enabled ?? config.global_env?.enabled ?? true,
+      env: env ?? config.global_env?.env ?? {},
+    };
+
+    saveUnifiedConfig(config);
+    res.json({ success: true, config: config.global_env });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

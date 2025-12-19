@@ -14,7 +14,7 @@ import { getCcsDir } from '../utils/config-manager';
 import { warn } from '../utils/ui';
 import { CLIProxyProvider, ProviderConfig, ProviderModelMapping } from './types';
 import { getModelMappingFromConfig, getEnvVarsFromConfig } from './base-config-loader';
-import { loadOrCreateUnifiedConfig } from '../config/unified-config-loader';
+import { loadOrCreateUnifiedConfig, getGlobalEnvConfig } from '../config/unified-config-loader';
 
 /** Settings file structure for user overrides */
 interface ProviderSettings {
@@ -381,6 +381,18 @@ export function getClaudeEnvVars(
 }
 
 /**
+ * Get global env vars to inject into all third-party profiles.
+ * Returns empty object if disabled.
+ */
+function getGlobalEnvVars(): Record<string, string> {
+  const globalEnvConfig = getGlobalEnvConfig();
+  if (!globalEnvConfig.enabled) {
+    return {};
+  }
+  return globalEnvConfig.env;
+}
+
+/**
  * Get effective environment variables for provider
  *
  * Priority order:
@@ -388,7 +400,7 @@ export function getClaudeEnvVars(
  * 2. User settings file (~/.ccs/{provider}.settings.json) if exists
  * 3. Bundled defaults from PROVIDER_CONFIGS
  *
- * This allows users to customize model mappings without code changes.
+ * All results are merged with global_env vars (telemetry/reporting disables).
  * User takes full responsibility for custom settings.
  */
 export function getEffectiveEnvVars(
@@ -396,6 +408,9 @@ export function getEffectiveEnvVars(
   port: number = CLIPROXY_DEFAULT_PORT,
   customSettingsPath?: string
 ): NodeJS.ProcessEnv {
+  // Get global env vars (DISABLE_TELEMETRY, etc.)
+  const globalEnv = getGlobalEnvVars();
+
   // Priority 1: Custom settings path (for user-defined variants)
   if (customSettingsPath) {
     const expandedPath = customSettingsPath.replace(/^~/, require('os').homedir());
@@ -405,8 +420,8 @@ export function getEffectiveEnvVars(
         const settings: ProviderSettings = JSON.parse(content);
 
         if (settings.env && typeof settings.env === 'object') {
-          // Custom variant settings found - use them
-          return settings.env;
+          // Custom variant settings found - merge with global env
+          return { ...globalEnv, ...settings.env };
         }
       } catch {
         // Invalid JSON - fall through to provider defaults
@@ -427,9 +442,8 @@ export function getEffectiveEnvVars(
       const settings: ProviderSettings = JSON.parse(content);
 
       if (settings.env && typeof settings.env === 'object') {
-        // User override found - use their settings
-        // Note: User is responsible for correctness
-        return settings.env;
+        // User override found - merge with global env
+        return { ...globalEnv, ...settings.env };
       }
     } catch {
       // Invalid JSON or structure - fall through to defaults
@@ -437,8 +451,8 @@ export function getEffectiveEnvVars(
     }
   }
 
-  // No override or invalid - use bundled defaults
-  return getClaudeEnvVars(provider, port);
+  // No override or invalid - use bundled defaults merged with global env
+  return { ...globalEnv, ...getClaudeEnvVars(provider, port) };
 }
 
 /**

@@ -16,6 +16,7 @@ import { Save, Loader2, Code2, Trash2, RefreshCw, Plus, X, Info } from 'lucide-r
 import { toast } from 'sonner';
 import { CopyButton } from '@/components/ui/copy-button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { GlobalEnvIndicator } from '@/components/global-env-indicator';
 
 // Lazy load CodeEditor to reduce initial bundle size
 const CodeEditor = lazy(() =>
@@ -412,7 +413,7 @@ export function ProfileEditor({ profileName, onDelete }: ProfileEditorProps) {
             Invalid JSON syntax
           </div>
         )}
-        <div className="flex-1 overflow-hidden px-6 pb-6 pt-4">
+        <div className="flex-1 overflow-hidden px-6 pb-4 pt-4">
           <div className="h-full border rounded-md overflow-hidden bg-background">
             <CodeEditor
               value={rawJsonContent}
@@ -420,6 +421,12 @@ export function ProfileEditor({ profileName, onDelete }: ProfileEditorProps) {
               language="json"
               minHeight="100%"
             />
+          </div>
+        </div>
+        {/* Global Env Indicator */}
+        <div className="mx-6 mb-4">
+          <div className="border rounded-md overflow-hidden">
+            <GlobalEnvIndicator profileEnv={settings?.env} />
           </div>
         </div>
       </div>

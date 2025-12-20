@@ -62,17 +62,23 @@ The dashboard provides visual management for all account types:
 - **API Profiles**: Configure GLM, Kimi with your keys
 - **Health Monitor**: Real-time status across all profiles
 
-**Analytics (Light/Dark Theme)**
+**Analytics Dashboard**
 
-![Analytics Light](assets/screenshots/analytics-light.png)
+![Analytics](assets/screenshots/analytics.webp)
 
-![Analytics Dark](assets/screenshots/analytics.png)
+**Live Auth Monitor**
 
-**API Profiles & OAuth Providers**
+![Live Auth Monitor](assets/screenshots/live-auth-monitor.webp)
 
-![API Profiles](assets/screenshots/api_profiles.png)
+**CLI Proxy API & Copilot Integration**
 
-![CLIProxy](assets/screenshots/cliproxy.png)
+![CLIProxy API](assets/screenshots/cliproxyapi.webp)
+
+![Copilot API](assets/screenshots/copilot-api.webp)
+
+**WebSearch Fallback**
+
+![WebSearch](assets/screenshots/websearch.webp)
 
 <br>
 
@@ -83,11 +89,16 @@ The dashboard provides visual management for all account types:
 | **Claude** | Subscription | `ccs` | Default, strategic planning |
 | **Gemini** | OAuth | `ccs gemini` | Zero-config, fast iteration |
 | **Codex** | OAuth | `ccs codex` | Code generation |
+| **Copilot** | OAuth | `ccs copilot` | GitHub Copilot models |
 | **Antigravity** | OAuth | `ccs agy` | Alternative routing |
 | **GLM** | API Key | `ccs glm` | Cost-optimized execution |
 | **Kimi** | API Key | `ccs kimi` | Long-context, thinking mode |
 
 > **OAuth providers** authenticate via browser on first run. Tokens are cached in `~/.ccs/cliproxy/auth/`.
+
+**Powered by:**
+- [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) - OAuth proxy for Gemini, Codex, Antigravity
+- [copilot-api](https://github.com/ericc-ch/copilot-api) - GitHub Copilot API integration
 
 > [!TIP]
 > **Need more?** CCS supports **any Anthropic-compatible API**. Create custom profiles for self-hosted LLMs, enterprise gateways, or alternative providers. See [API Profiles documentation](https://docs.ccs.kaitran.ca/providers/api-profiles).
@@ -197,15 +208,24 @@ Without Developer Mode, CCS falls back to copying directories.
 
 ## WebSearch
 
-Third-party profiles (Gemini, Codex, GLM, etc.) cannot use Anthropic's native WebSearch. CCS automatically configures MCP-based web search as a fallback.
+Third-party profiles (Gemini, Codex, GLM, etc.) cannot use Anthropic's native WebSearch. CCS automatically provides web search via CLI tools with automatic fallback.
 
 ### How It Works
 
 | Profile Type | WebSearch Method |
 |--------------|------------------|
 | Claude (native) | Anthropic WebSearch API |
-| OAuth providers | MCP web-search-prime (auto-configured) |
-| API profiles | MCP web-search-prime (auto-configured) |
+| Third-party profiles | CLI Tool Fallback Chain |
+
+### CLI Tool Fallback Chain
+
+CCS intercepts WebSearch requests and routes them through available CLI tools:
+
+| Priority | Tool | Auth | Install |
+|----------|------|------|---------|
+| 1st | Gemini CLI | OAuth (free) | `npm install -g @google/gemini-cli` |
+| 2nd | OpenCode | OAuth (free) | `curl -fsSL https://opencode.ai/install \| bash` |
+| 3rd | Grok CLI | API Key | `npm install -g @vibe-kit/grok-cli` |
 
 ### Configuration
 
@@ -213,22 +233,18 @@ Configure via dashboard (**Settings** page) or `~/.ccs/config.yaml`:
 
 ```yaml
 websearch:
-  enabled: true                    # Enable/disable auto-config
-  provider: auto                   # auto | web-search-prime | brave | tavily
-  fallback: true                   # Enable fallback chain
+  enabled: true                    # Enable/disable (default: true)
+  gemini:
+    enabled: true                  # Use Gemini CLI (default: true)
+    model: gemini-2.5-flash        # Model to use
+  opencode:
+    enabled: true                  # Use OpenCode as fallback
+  grok:
+    enabled: false                 # Requires XAI_API_KEY
 ```
 
-### Optional API Keys
-
-For additional search providers, set environment variables:
-
-```bash
-export BRAVE_API_KEY="your-key"    # Free tier: 15k queries/month
-export TAVILY_API_KEY="your-key"   # AI-optimized search (paid)
-```
-
-> [!NOTE]
-> `web-search-prime` works without API keys. Brave/Tavily are optional fallbacks.
+> [!TIP]
+> **Gemini CLI** is recommended - free OAuth authentication with 1000 requests/day. Just run `gemini` once to authenticate via browser.
 
 See [docs/websearch.md](./docs/websearch.md) for detailed configuration and troubleshooting.
 
@@ -287,7 +303,13 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 MIT License - see [LICENSE](LICENSE).
 
+<br>
+
 <div align="center">
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=kaitranntt/ccs&type=date&legend=top-left)](https://www.star-history.com/#kaitranntt/ccs&type=date&legend=top-left)
 
 ---
 

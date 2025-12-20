@@ -1,57 +1,5 @@
 import * as path from 'path';
 import * as os from 'os';
-import { ColorName, TerminalInfo } from '../types';
-
-// =============================================================================
-// DEPRECATION NOTICE
-// =============================================================================
-// The color functions in this file are deprecated in favor of the new UI layer.
-// Please use `import { ui } from './ui'` instead for:
-// - ui.color(text, semantic) - semantic colors
-// - ui.ok(), ui.fail(), ui.warn(), ui.info() - status indicators
-// - ui.box(), ui.table() - containers
-// - ui.header(), ui.subheader() - section headers
-// =============================================================================
-
-/**
- * TTY-aware color detection (matches lib/ccs bash logic)
- * @deprecated Use `import { ui } from './ui'` instead
- */
-function getColors(): Record<ColorName, string> {
-  const forcedColors = process.env.FORCE_COLOR;
-  const noColor = process.env.NO_COLOR;
-  const isTTY = process.stdout.isTTY === true; // Must be explicitly true
-
-  const useColors = !!forcedColors || (isTTY && !noColor);
-
-  if (useColors) {
-    return {
-      red: '\x1b[0;31m',
-      yellow: '\x1b[1;33m',
-      cyan: '\x1b[0;36m',
-      green: '\x1b[0;32m',
-      blue: '\x1b[0;34m',
-      bold: '\x1b[1m',
-      cyanBold: '\x1b[1;36m',
-      reset: '\x1b[0m',
-    };
-  }
-
-  return { red: '', yellow: '', cyan: '', green: '', blue: '', bold: '', cyanBold: '', reset: '' };
-}
-
-// Colors object (dynamic)
-export const colors = getColors();
-
-/**
- * Helper: Apply color to text (returns plain text if colors disabled)
- * @deprecated Use `import { ui } from './ui'` and `ui.color()` instead
- */
-export function colored(text: string, colorName: ColorName = 'reset'): string {
-  const currentColors = getColors();
-  const color = currentColors[colorName] || '';
-  return color ? `${color}${text}${currentColors.reset}` : text;
-}
 
 /**
  * Simple error formatting
@@ -81,17 +29,6 @@ export function expandPath(pathStr: string): string {
   }
 
   return path.normalize(pathStr);
-}
-
-/**
- * Detect terminal capabilities
- */
-export function getTerminalInfo(): TerminalInfo {
-  return {
-    isTTY: process.stdout.isTTY ?? false,
-    supportsColor: (process.stdout.isTTY ?? false) && !process.env.NO_COLOR,
-    noColorEnv: !!process.env.NO_COLOR,
-  };
 }
 
 /**

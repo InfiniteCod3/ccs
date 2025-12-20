@@ -1,0 +1,30 @@
+/**
+ * API Services
+ *
+ * Barrel export for API-related business logic services.
+ */
+
+// Validation services
+export { validateApiName, validateUrl, getUrlWarning, sanitizeBaseUrl } from './validation-service';
+
+// Profile types
+export {
+  type ModelMapping,
+  type ApiProfileInfo,
+  type CliproxyVariantInfo,
+  type ApiListResult,
+  type CreateApiProfileResult,
+  type RemoveApiProfileResult,
+} from './profile-types';
+
+// Profile read operations
+export {
+  apiProfileExists,
+  isApiProfileConfigured,
+  listApiProfiles,
+  getApiProfileNames,
+  isUsingUnifiedConfig,
+} from './profile-reader';
+
+// Profile write operations
+export { createApiProfile, removeApiProfile } from './profile-writer';

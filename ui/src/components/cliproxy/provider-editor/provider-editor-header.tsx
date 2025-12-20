@@ -1,0 +1,77 @@
+/**
+ * Provider Editor Header
+ * Header bar with provider info, refresh and save buttons
+ */
+
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Save, Loader2, RefreshCw } from 'lucide-react';
+import { ProviderLogo } from '../provider-logo';
+import type { SettingsResponse } from './types';
+
+interface ProviderEditorHeaderProps {
+  provider: string;
+  displayName: string;
+  logoProvider?: string;
+  data?: SettingsResponse;
+  isLoading: boolean;
+  hasChanges: boolean;
+  isRawJsonValid: boolean;
+  isSaving: boolean;
+  onRefetch: () => void;
+  onSave: () => void;
+}
+
+export function ProviderEditorHeader({
+  displayName,
+  logoProvider,
+  provider,
+  data,
+  isLoading,
+  hasChanges,
+  isRawJsonValid,
+  isSaving,
+  onRefetch,
+  onSave,
+}: ProviderEditorHeaderProps) {
+  return (
+    <div className="px-6 py-4 border-b bg-background flex items-center justify-between shrink-0">
+      <div className="flex items-center gap-3">
+        <ProviderLogo provider={logoProvider || provider} size="lg" />
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold">{displayName}</h2>
+            {data?.path && (
+              <Badge variant="outline" className="text-xs">
+                {data.path.replace(/^.*\//, '')}
+              </Badge>
+            )}
+          </div>
+          {data && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Last modified: {new Date(data.mtime).toLocaleString()}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={onRefetch} disabled={isLoading}>
+          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+        </Button>
+        <Button size="sm" onClick={onSave} disabled={isSaving || !hasChanges || !isRawJsonValid}>
+          {isSaving ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4 mr-1" />
+              Save
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}

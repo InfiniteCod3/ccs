@@ -450,6 +450,16 @@ export function updateUnifiedConfig(updates: Partial<UnifiedConfig>): UnifiedCon
 }
 
 /**
+ * Check if unified config mode is active.
+ * Returns true if config.yaml exists OR CCS_UNIFIED_CONFIG=1.
+ *
+ * Use this centralized function instead of duplicating the logic.
+ */
+export function isUnifiedMode(): boolean {
+  return hasUnifiedConfig() || isUnifiedConfigEnabled();
+}
+
+/**
  * Get or set default profile name.
  */
 export function getDefaultProfile(): string | undefined {

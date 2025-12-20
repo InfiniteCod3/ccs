@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 
+/**
+ * Headless executor for Claude CLI delegation
+ * Spawns claude with -p flag for single-turn execution
+ */
+
 import { spawn } from 'child_process';
 import * as path from 'path';
 import * as os from 'os';
@@ -7,92 +12,15 @@ import * as fs from 'fs';
 import { SessionManager } from './session-manager';
 import { SettingsParser } from './settings-parser';
 import { ui, warn, info } from '../utils/ui';
+import { type ExecutionOptions, type ExecutionResult, type StreamMessage } from './executor/types';
+import { StreamBuffer, formatToolVerbose } from './executor/stream-parser';
+import { buildExecutionResult } from './executor/result-aggregator';
 
-// Type definitions for delegation responses
-interface ClaudeMessage {
-  type: string;
-  content?: string;
-  thinking?: string;
-  tool_use?: {
-    id: string;
-    name: string;
-    input: Record<string, unknown>;
-  };
-  tool_result?: {
-    tool_use_id: string;
-    content: string;
-  };
-}
-
-interface PermissionDenial {
-  tool_name: string;
-  reason: string;
-}
-
-interface ExecutionError {
-  message?: string;
-  error?: string;
-  type?: string;
-  tool_name?: string;
-  [key: string]: unknown;
-}
-
-interface ExecutionOptions {
-  cwd?: string;
-  timeout?: number;
-  outputFormat?: string;
-  permissionMode?: string;
-  resumeSession?: boolean;
-  sessionId?: string;
-  maxRetries?: number;
-  extraArgs?: string[]; // Passthrough args for Claude CLI
-}
-
-interface ExecutionResult {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-  cwd: string;
-  profile: string;
-  duration: number;
-  timedOut: boolean;
-  success: boolean;
-  messages: ClaudeMessage[];
-  sessionId?: string;
-  totalCost?: number;
-  numTurns?: number;
-  isError?: boolean;
-  type?: string | null;
-  subtype?: string;
-  durationApi?: number;
-  permissionDenials?: PermissionDenial[];
-  errors?: ExecutionError[];
-  content?: string;
-}
-
-interface StreamMessage {
-  type: string;
-  message?: {
-    content?: Array<{
-      type: string;
-      name?: string;
-      input?: Record<string, unknown>;
-    }>;
-  };
-  session_id?: string;
-  total_cost_usd?: number;
-  num_turns?: number;
-  is_error?: boolean;
-  result?: string;
-  duration_api_ms?: number;
-  permission_denials?: PermissionDenial[];
-  errors?: ExecutionError[];
-  subtype?: string;
-}
+// Re-export types for consumers
+export type { ExecutionOptions, ExecutionResult, StreamMessage } from './executor/types';
 
 /**
  * Headless executor for Claude CLI delegation
- * Spawns claude with -p flag for single-turn execution
  */
 export class HeadlessExecutor {
   /**
@@ -141,26 +69,20 @@ export class HeadlessExecutor {
     }
 
     // Smart slash command detection and preservation
-    // Detects if prompt contains slash command and restructures for proper execution
     const processedPrompt = this._processSlashCommand(enhancedPrompt);
 
     // Prepare arguments
     const args: string[] = ['-p', processedPrompt, '--settings', settingsPath];
 
     // Always use stream-json for real-time progress visibility
-    // Note: --verbose is required when using --print with stream-json
     args.push('--output-format', 'stream-json', '--verbose');
 
     // Add permission mode
     if (permissionMode && permissionMode !== 'default') {
       if (permissionMode === 'bypassPermissions') {
         args.push('--dangerously-skip-permissions');
-        // Warn about dangerous mode
         if (process.env.CCS_DEBUG) {
           console.warn(warn('WARNING: Using --dangerously-skip-permissions mode'));
-          console.warn(
-            warn('This bypasses ALL permission checks. Use only in trusted environments.')
-          );
         }
       } else {
         args.push('--permission-mode', permissionMode);
@@ -170,56 +92,35 @@ export class HeadlessExecutor {
     // Add resume flag for multi-turn sessions
     if (resumeSession) {
       const lastSession = sessionMgr.getLastSession(profile);
-
       if (lastSession) {
         args.push('--resume', lastSession.sessionId);
         if (process.env.CCS_DEBUG) {
-          const cost =
-            lastSession.totalCost !== undefined && lastSession.totalCost !== null
-              ? lastSession.totalCost.toFixed(4)
-              : '0.0000';
-          console.error(
-            info(
-              `Resuming session: ${lastSession.sessionId} (${lastSession.turns} turns, $${cost})`
-            )
-          );
+          const cost = lastSession.totalCost?.toFixed(4) || '0.0000';
+          console.error(info(`Resuming session: ${lastSession.sessionId} ($${cost})`));
         }
       } else if (sessionId) {
         args.push('--resume', sessionId);
-        if (process.env.CCS_DEBUG) {
-          console.error(info(`Resuming specific session: ${sessionId}`));
-        }
       } else {
         console.warn(warn('No previous session found, starting new session'));
       }
     } else if (sessionId) {
       args.push('--resume', sessionId);
-      if (process.env.CCS_DEBUG) {
-        console.error(info(`Resuming specific session: ${sessionId}`));
-      }
     }
 
     // Add tool restrictions from settings
     const toolRestrictions = SettingsParser.parseToolRestrictions(cwd);
-
     if (toolRestrictions.allowedTools.length > 0) {
-      args.push('--allowedTools');
-      toolRestrictions.allowedTools.forEach((tool) => args.push(tool));
+      args.push('--allowedTools', ...toolRestrictions.allowedTools);
     }
-
     if (toolRestrictions.disallowedTools.length > 0) {
-      args.push('--disallowedTools');
-      toolRestrictions.disallowedTools.forEach((tool) => args.push(tool));
+      args.push('--disallowedTools', ...toolRestrictions.disallowedTools);
     }
 
-    // Note: No max-turns limit - using time-based limits instead (default 10min timeout)
-
-    // Passthrough extra args (from Claude CLI flags like --agent, --system-prompt-file, etc.)
+    // Passthrough extra args
     if (extraArgs.length > 0) {
       args.push(...extraArgs);
     }
 
-    // Debug log args
     if (process.env.CCS_DEBUG) {
       console.error(info(`Claude CLI args: ${args.join(' ')}`));
     }
@@ -228,13 +129,38 @@ export class HeadlessExecutor {
     await ui.init();
 
     // Execute with spawn
+    return this._spawnAndExecute(claudeCli, args, {
+      cwd,
+      profile,
+      timeout,
+      resumeSession,
+      sessionId,
+      sessionMgr,
+    });
+  }
+
+  /**
+   * Spawn Claude CLI and handle execution
+   */
+  private static _spawnAndExecute(
+    claudeCli: string,
+    args: string[],
+    ctx: {
+      cwd: string;
+      profile: string;
+      timeout: number;
+      resumeSession: boolean;
+      sessionId: string | null;
+      sessionMgr: SessionManager;
+    }
+  ): Promise<ExecutionResult> {
+    const { cwd, profile, timeout, resumeSession, sessionId, sessionMgr } = ctx;
+
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
-
-      // Show progress unless explicitly disabled with CCS_QUIET
       const showProgress = !process.env.CCS_QUIET;
+      const streamBuffer = new StreamBuffer();
 
-      // Show initial progress message
       if (showProgress) {
         const modelName =
           profile === 'glm' ? 'GLM-4.6' : profile === 'kimi' ? 'Kimi' : profile.toUpperCase();
@@ -250,40 +176,28 @@ export class HeadlessExecutor {
       let stdout = '';
       let stderr = '';
       let progressInterval: NodeJS.Timeout | undefined;
-      const messages: StreamMessage[] = []; // Accumulate stream-json messages
-      let partialLine = ''; // Buffer for incomplete JSON lines
+      const messages: StreamMessage[] = [];
+      let timedOut = false;
 
-      // Handle parent process termination (Ctrl+C or Esc in Claude)
-      // When main Claude session is killed, cleanup spawned child process
+      // Setup signal handlers for cleanup
       const cleanupHandler = () => {
         if (!proc.killed) {
-          if (process.env.CCS_DEBUG) {
-            console.error(warn('Parent process terminating, killing delegated session...'));
-          }
           proc.kill('SIGTERM');
-          // Force kill if not dead after 2s
           setTimeout(() => {
-            if (!proc.killed) {
-              proc.kill('SIGKILL');
-            }
+            if (!proc.killed) proc.kill('SIGKILL');
           }, 2000);
         }
       };
-
-      // Register signal handlers for parent process termination
       process.once('SIGINT', cleanupHandler);
       process.once('SIGTERM', cleanupHandler);
-
-      // Cleanup signal handlers when child process exits
       const removeSignalHandlers = () => {
         process.removeListener('SIGINT', cleanupHandler);
         process.removeListener('SIGTERM', cleanupHandler);
       };
-
       proc.on('close', removeSignalHandlers);
       proc.on('error', removeSignalHandlers);
 
-      // Progress indicator (show elapsed time every 5 seconds)
+      // Progress indicator
       if (showProgress) {
         progressInterval = setInterval(() => {
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -291,155 +205,34 @@ export class HeadlessExecutor {
         }, 5000);
       }
 
-      // Capture stdout (stream-json format - jsonl)
+      // Capture stdout (stream-json format)
       proc.stdout?.on('data', (data: Buffer) => {
         const dataStr = data.toString();
         stdout += dataStr;
 
-        // Parse stream-json messages (jsonl format - one JSON per line)
-        const chunk = partialLine + dataStr;
-        const lines = chunk.split('\n');
-        partialLine = lines.pop() || ''; // Save incomplete line for next chunk
+        const parsedMessages = streamBuffer.parseChunk(dataStr);
+        for (const msg of parsedMessages) {
+          messages.push(msg);
 
-        for (const line of lines) {
-          if (!line.trim()) continue;
-
-          try {
-            const msg: StreamMessage = JSON.parse(line);
-            messages.push(msg);
-
-            // Show real-time tool use with verbose details
-            if (showProgress && msg.type === 'assistant') {
-              const toolUses = msg.message?.content?.filter((c) => c.type === 'tool_use') || [];
-
-              for (const tool of toolUses) {
-                process.stderr.write('\r\x1b[K'); // Clear line
-
-                // Show verbose tool use with description/input if available
-                const toolInput = tool.input || {};
-                let verboseMsg = `[Tool] ${tool.name}`;
-
-                // Add context based on tool type (all Claude Code tools)
-                switch (tool.name) {
-                  case 'Bash':
-                    if (toolInput.command) {
-                      // Truncate long commands
-                      const command = toolInput.command as string;
-                      const cmd = command.length > 80 ? command.substring(0, 77) + '...' : command;
-                      verboseMsg += `: ${cmd}`;
-                    }
-                    break;
-
-                  case 'Edit':
-                  case 'Write':
-                  case 'Read':
-                    if (toolInput.file_path) {
-                      verboseMsg += `: ${toolInput.file_path}`;
-                    }
-                    break;
-
-                  case 'NotebookEdit':
-                  case 'NotebookRead':
-                    if (toolInput.notebook_path) {
-                      verboseMsg += `: ${toolInput.notebook_path}`;
-                    }
-                    break;
-
-                  case 'Grep':
-                    if (toolInput.pattern) {
-                      verboseMsg += `: searching for "${toolInput.pattern}"`;
-                      if (toolInput.path) {
-                        verboseMsg += ` in ${toolInput.path}`;
-                      }
-                    }
-                    break;
-
-                  case 'Glob':
-                    if (toolInput.pattern) {
-                      verboseMsg += `: ${toolInput.pattern}`;
-                    }
-                    break;
-
-                  case 'SlashCommand':
-                    if (toolInput.command) {
-                      verboseMsg += `: ${toolInput.command}`;
-                    }
-                    break;
-
-                  case 'Task':
-                    if (toolInput.description) {
-                      verboseMsg += `: ${toolInput.description}`;
-                    } else if (toolInput.prompt) {
-                      const promptText = toolInput.prompt as string;
-                      const prompt =
-                        promptText.length > 60 ? promptText.substring(0, 57) + '...' : promptText;
-                      verboseMsg += `: ${prompt}`;
-                    }
-                    break;
-
-                  case 'TodoWrite':
-                    if (toolInput.todos && Array.isArray(toolInput.todos)) {
-                      // Show in_progress task instead of just count
-                      const inProgressTask = toolInput.todos.find(
-                        (t: { status: string; activeForm?: string }) => t.status === 'in_progress'
-                      );
-                      if (inProgressTask && inProgressTask.activeForm) {
-                        verboseMsg += `: ${inProgressTask.activeForm}`;
-                      } else {
-                        // Fallback to count if no in_progress task
-                        verboseMsg += `: ${toolInput.todos.length} task(s)`;
-                      }
-                    }
-                    break;
-
-                  case 'WebFetch':
-                    if (toolInput.url) {
-                      verboseMsg += `: ${toolInput.url}`;
-                    }
-                    break;
-
-                  case 'WebSearch':
-                    if (toolInput.query) {
-                      verboseMsg += `: "${toolInput.query}"`;
-                    }
-                    break;
-
-                  default:
-                    // For unknown tools, show first meaningful parameter
-                    if (Object.keys(toolInput).length > 0) {
-                      const firstKey = Object.keys(toolInput)[0];
-                      const firstValue = toolInput[firstKey];
-                      if (typeof firstValue === 'string' && firstValue.length < 60) {
-                        verboseMsg += `: ${firstValue}`;
-                      }
-                    }
-                }
-
-                process.stderr.write(`${verboseMsg}\n`);
-              }
-            }
-          } catch (parseError) {
-            // Skip malformed JSON lines (shouldn't happen with stream-json)
-            if (process.env.CCS_DEBUG) {
-              console.error(
-                warn(`Failed to parse stream-json line: ${(parseError as Error).message}`)
-              );
+          // Show real-time tool use
+          if (showProgress && msg.type === 'assistant') {
+            const toolUses = msg.message?.content?.filter((c) => c.type === 'tool_use') || [];
+            for (const tool of toolUses) {
+              process.stderr.write('\r\x1b[K');
+              const toolInput = tool.input || {};
+              const verboseMsg = formatToolVerbose(tool.name || 'Unknown', toolInput);
+              process.stderr.write(`${verboseMsg}\n`);
             }
           }
         }
       });
 
-      // Stream stderr in real-time (progress messages from Claude CLI)
+      // Stream stderr in real-time
       proc.stderr?.on('data', (data: Buffer) => {
         const stderrText = data.toString();
         stderr += stderrText;
-
-        // Show stderr in real-time if in TTY
         if (showProgress) {
-          // Clear progress line before showing stderr
-          if (progressInterval) {
-            process.stderr.write('\r\x1b[K'); // Clear line
-          }
+          if (progressInterval) process.stderr.write('\r\x1b[K');
           process.stderr.write(stderrText);
         }
       });
@@ -448,80 +241,44 @@ export class HeadlessExecutor {
       proc.on('close', (exitCode: number | null) => {
         const duration = Date.now() - startTime;
 
-        // Clear progress indicator
         if (progressInterval) {
           clearInterval(progressInterval);
-          process.stderr.write('\r\x1b[K'); // Clear line
+          process.stderr.write('\r\x1b[K');
         }
 
-        // Show completion message
         if (showProgress) {
           const durationSec = (duration / 1000).toFixed(1);
-          if (timedOut) {
-            console.error(ui.warn(`Execution timed out after ${durationSec}s`));
-          } else {
-            console.error(ui.info(`Execution completed in ${durationSec}s`));
-          }
-          console.error(''); // Blank line before formatted output
+          console.error(
+            timedOut
+              ? ui.warn(`Timed out after ${durationSec}s`)
+              : ui.info(`Completed in ${durationSec}s`)
+          );
+          console.error('');
         }
 
-        const result: ExecutionResult = {
+        const result = buildExecutionResult({
           exitCode: exitCode || 0,
           stdout,
           stderr,
           cwd,
           profile,
           duration,
-          timedOut: false,
-          success: exitCode === 0 && !timedOut,
-          messages, // Include all stream-json messages
-        };
+          timedOut,
+          messages,
+        });
 
-        // Extract metadata from final 'result' message in stream-json
-        const resultMessage = messages.find((m) => m.type === 'result');
-        if (resultMessage) {
-          // Add parsed fields from result message
-          result.sessionId = resultMessage.session_id || undefined;
-          result.totalCost = resultMessage.total_cost_usd || 0;
-          result.numTurns = resultMessage.num_turns || 0;
-          result.isError = resultMessage.is_error || false;
-          result.type = resultMessage.type || null;
-          result.subtype = resultMessage.subtype || undefined;
-          result.durationApi = resultMessage.duration_api_ms || 0;
-          result.permissionDenials = resultMessage.permission_denials || [];
-          result.errors = resultMessage.errors || [];
-
-          // Extract content from result message
-          result.content = resultMessage.result || '';
-        } else {
-          // Fallback: no result message found (shouldn't happen)
-          result.content = stdout;
-          if (process.env.CCS_DEBUG) {
-            console.error(warn('No result message found in stream-json output'));
-          }
-        }
-
-        // Store or update session if we have session ID (even on timeout, for :continue support)
+        // Store session
         if (result.sessionId) {
           if (resumeSession || sessionId) {
-            // Update existing session
-            sessionMgr.updateSession(profile, result.sessionId, {
-              totalCost: result.totalCost,
-            });
+            sessionMgr.updateSession(profile, result.sessionId, { totalCost: result.totalCost });
           } else {
-            // Store new session
             sessionMgr.storeSession(profile, {
               sessionId: result.sessionId,
               totalCost: result.totalCost,
-              cwd: result.cwd,
+              cwd,
             });
           }
-
-          // Cleanup expired sessions periodically
-          if (Math.random() < 0.1) {
-            // 10% chance
-            sessionMgr.cleanupExpired();
-          }
+          if (Math.random() < 0.1) sessionMgr.cleanupExpired();
         }
 
         resolve(result);
@@ -529,57 +286,31 @@ export class HeadlessExecutor {
 
       // Handle errors
       proc.on('error', (error: Error) => {
-        if (progressInterval) {
-          clearInterval(progressInterval);
-        }
+        if (progressInterval) clearInterval(progressInterval);
         reject(new Error(`Failed to execute Claude CLI: ${error.message}`));
       });
 
-      // Handle timeout with graceful SIGTERM then forceful SIGKILL
-      let timedOut = false;
+      // Handle timeout
       if (timeout > 0) {
         const timeoutHandle = setTimeout(() => {
           if (!proc.killed) {
             timedOut = true;
-
             if (progressInterval) {
               clearInterval(progressInterval);
-              process.stderr.write('\r\x1b[K'); // Clear line
+              process.stderr.write('\r\x1b[K');
             }
-
-            if (process.env.CCS_DEBUG) {
-              console.error(
-                warn(`Timeout reached after ${timeout}ms, sending SIGTERM for graceful shutdown...`)
-              );
-            }
-
-            // Send SIGTERM for graceful shutdown
             proc.kill('SIGTERM');
-
-            // If process doesn't terminate within 10s, force kill
             setTimeout(() => {
-              if (!proc.killed) {
-                if (process.env.CCS_DEBUG) {
-                  console.error(warn('Process did not terminate gracefully, sending SIGKILL...'));
-                }
-                proc.kill('SIGKILL');
-              }
-            }, 10000); // Give 10s for graceful shutdown instead of 5s
+              if (!proc.killed) proc.kill('SIGKILL');
+            }, 10000);
           }
         }, timeout);
-
-        // Clear timeout on successful completion
         proc.on('close', () => clearTimeout(timeoutHandle));
       }
     });
   }
 
-  /**
-   * Validate permission mode
-   * @param mode - Permission mode
-   * @throws {Error} If mode is invalid
-   * @private
-   */
+  /** Validate permission mode */
   private static _validatePermissionMode(mode: string): void {
     const VALID_MODES = ['default', 'plan', 'acceptEdits', 'bypassPermissions'];
     if (!VALID_MODES.includes(mode)) {
@@ -587,34 +318,18 @@ export class HeadlessExecutor {
     }
   }
 
-  /**
-   * Detect Claude CLI executable
-   * @returns Path to claude CLI or null if not found
-   * @private
-   */
+  /** Detect Claude CLI executable */
   private static _detectClaudeCli(): string | null {
-    // Check environment variable override
-    if (process.env.CCS_CLAUDE_PATH) {
-      return process.env.CCS_CLAUDE_PATH;
-    }
-
-    // Try to find in PATH
+    if (process.env.CCS_CLAUDE_PATH) return process.env.CCS_CLAUDE_PATH;
     const { execSync } = require('child_process');
     try {
-      const result = execSync('command -v claude', { encoding: 'utf8' });
-      return result.trim();
-    } catch (_error) {
+      return execSync('command -v claude', { encoding: 'utf8' }).trim();
+    } catch {
       return null;
     }
   }
 
-  /**
-   * Execute with retry logic
-   * @param profile - Profile name
-   * @param enhancedPrompt - Enhanced prompt
-   * @param options - Execution options
-   * @returns execution result
-   */
+  /** Execute with retry logic */
   static async executeWithRetry(
     profile: string,
     enhancedPrompt: string,
@@ -626,103 +341,59 @@ export class HeadlessExecutor {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const result = await this.execute(profile, enhancedPrompt, execOptions);
-
-        // If successful, return immediately
-        if (result.success) {
-          return result;
-        }
-
-        // If not last attempt, retry
+        if (result.success) return result;
         if (attempt < maxRetries) {
           console.error(warn(`Attempt ${attempt + 1} failed, retrying...`));
-          await this._sleep(1000 * (attempt + 1)); // Exponential backoff
+          await this._sleep(1000 * (attempt + 1));
           continue;
         }
-
-        // Last attempt failed, return result anyway
         return result;
       } catch (error) {
         lastError = error as Error;
-
         if (attempt < maxRetries) {
-          console.error(
-            warn(`Attempt ${attempt + 1} errored: ${(error as Error).message}, retrying...`)
-          );
+          console.error(warn(`Attempt ${attempt + 1} errored, retrying...`));
           await this._sleep(1000 * (attempt + 1));
         }
       }
     }
-
-    // All retries exhausted
     throw lastError || new Error('Execution failed after all retry attempts');
   }
 
-  /**
-   * Sleep utility for retry backoff
-   * @param ms - Milliseconds to sleep
-   * @returns Promise<void>
-   * @private
-   */
+  /** Sleep utility for retry backoff */
   private static _sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  /**
-   * Process prompt to detect and preserve slash commands
-   * Implements smart enhancement: preserves slash command at start, allows context in rest
-   * @param prompt - Original prompt (may contain slash command)
-   * @returns Processed prompt with slash command preserved
-   * @private
-   */
+  /** Process prompt to detect and preserve slash commands */
   private static _processSlashCommand(prompt: string): string {
     const trimmed = prompt.trim();
 
-    // Case 1: Already starts with slash command - keep as-is
-    if (trimmed.match(/^\/[\w:-]+(\s|$)/)) {
-      return prompt;
-    }
+    // Case 1: Already starts with slash command
+    if (trimmed.match(/^\/[\w:-]+(\s|$)/)) return prompt;
 
     // Case 2: Find slash command embedded in text
-    // Look for /command that's NOT part of a file path
-    // File paths: /home/user, /path/to/file (have / before or after)
-    // Commands: /cook, /plan (standalone, preceded by space/colon/start)
-    // Strategy: Find LAST occurrence that looks like a command, not a path
     const embeddedSlash = trimmed.match(/(?:^|[^\w/])(\/[\w:-]+)(\s+[\s\S]*)?$/);
-
     if (embeddedSlash) {
-      const command = embeddedSlash[1]; // e.g., "/cook"
-      const args = (embeddedSlash[2] || '').trim(); // Everything after command
-
-      // Calculate where the command starts (excluding preceding char if any)
+      const command = embeddedSlash[1];
+      const args = (embeddedSlash[2] || '').trim();
       const matchIndex = embeddedSlash.index || 0;
       const matchStart = matchIndex + (embeddedSlash[0][0] === '/' ? 0 : 1);
       const beforeCommand = trimmed.substring(0, matchStart).trim();
 
-      // Restructure: command first, context after
-      if (beforeCommand && args) {
-        return `${command} ${args}\n\nContext: ${beforeCommand}`;
-      } else if (beforeCommand) {
-        return `${command}\n\nContext: ${beforeCommand}`;
-      }
+      if (beforeCommand && args) return `${command} ${args}\n\nContext: ${beforeCommand}`;
+      if (beforeCommand) return `${command}\n\nContext: ${beforeCommand}`;
       return args ? `${command} ${args}` : command;
     }
 
-    // No slash command detected, return as-is
     return prompt;
   }
 
-  /**
-   * Test if profile is executable (quick health check)
-   * @param profile - Profile name
-   * @returns True if profile can execute
-   */
+  /** Test if profile is executable */
   static async testProfile(profile: string): Promise<boolean> {
     try {
-      const result = await this.execute(profile, 'Say "test successful"', {
-        timeout: 10000,
-      });
+      const result = await this.execute(profile, 'Say "test successful"', { timeout: 10000 });
       return result.success;
-    } catch (_error) {
+    } catch {
       return false;
     }
   }

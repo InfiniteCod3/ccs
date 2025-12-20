@@ -4,9 +4,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { Settings } from '../types';
+import { ValidationResult } from '../types/utils';
 
-interface ValidationResult {
-  valid: boolean;
+/**
+ * Extended validation result for delegation profiles
+ * Extends base ValidationResult with domain-specific fields
+ */
+interface DelegationValidationResult extends ValidationResult {
   error?: string;
   suggestion?: string;
   settingsPath?: string;
@@ -23,7 +27,7 @@ export class DelegationValidator {
    * @param profileName - Name of profile to validate (e.g., 'glm', 'kimi')
    * @returns Validation result { valid: boolean, error?: string, settingsPath?: string }
    */
-  static validate(profileName: string): ValidationResult {
+  static validate(profileName: string): DelegationValidationResult {
     const homeDir = os.homedir();
     const settingsPath = path.join(homeDir, '.ccs', `${profileName}.settings.json`);
 
@@ -110,7 +114,7 @@ export class DelegationValidator {
    * @param result - Validation result from validate()
    * @returns Formatted error message
    */
-  static formatError(result: ValidationResult): string {
+  static formatError(result: DelegationValidationResult): string {
     if (result.valid) {
       return '';
     }

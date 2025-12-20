@@ -42,6 +42,36 @@ export interface TerminalInfo {
  */
 export type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };
 
+/**
+ * Generic operation result for success/failure patterns
+ * Use this instead of defining new *Result interfaces
+ */
+export interface OperationResult<T = void> {
+  success: boolean;
+  message?: string;
+  error?: string;
+  data?: T;
+}
+
+/**
+ * Generic component/tool status
+ * Used for CLI tools, services, etc.
+ */
+export interface ComponentStatus {
+  installed: boolean;
+  path?: string;
+  version?: string;
+}
+
+/**
+ * Generic validation result
+ * Standardized on 'valid' property name
+ */
+export interface ValidationResult {
+  valid: boolean;
+  errors?: string[];
+}
+
 // =============================================================================
 // UI TYPES (Phase 1: CLI UI/UX Enhancement)
 // =============================================================================

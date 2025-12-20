@@ -1,0 +1,243 @@
+/**
+ * CLIProxy Auth Routes - Authentication and account management for CLIProxy providers
+ */
+
+import { Router, Request, Response } from 'express';
+import {
+  getAllAuthStatus,
+  getOAuthConfig,
+  initializeAccounts,
+  triggerOAuth,
+} from '../../cliproxy/auth-handler';
+import {
+  submitProjectSelection,
+  getPendingSelection,
+} from '../../cliproxy/project-selection-handler';
+import { fetchCliproxyStats } from '../../cliproxy/stats-fetcher';
+import {
+  getAllAccountsSummary,
+  getProviderAccounts,
+  setDefaultAccount as setDefaultAccountFn,
+  removeAccount as removeAccountFn,
+  touchAccount,
+} from '../../cliproxy/account-manager';
+import type { CLIProxyProvider } from '../../cliproxy/types';
+
+const router = Router();
+
+// Valid providers list
+const validProviders: CLIProxyProvider[] = ['gemini', 'codex', 'agy', 'qwen', 'iflow'];
+
+/**
+ * GET /api/cliproxy/auth - Get auth status for built-in CLIProxy profiles
+ * Also fetches CLIProxyAPI stats to update lastUsedAt for active providers
+ */
+router.get('/', async (_req: Request, res: Response) => {
+  // Initialize accounts from existing tokens on first request
+  initializeAccounts();
+
+  // Fetch CLIProxyAPI usage stats to determine active providers
+  const stats = await fetchCliproxyStats();
+
+  // Map CLIProxyAPI provider names to our internal provider names
+  const statsProviderMap: Record<string, CLIProxyProvider> = {
+    gemini: 'gemini',
+    antigravity: 'agy',
+    codex: 'codex',
+    qwen: 'qwen',
+    iflow: 'iflow',
+  };
+
+  // Update lastUsedAt for providers with recent activity
+  if (stats?.requestsByProvider) {
+    for (const [statsProvider, requestCount] of Object.entries(stats.requestsByProvider)) {
+      if (requestCount > 0) {
+        const provider = statsProviderMap[statsProvider.toLowerCase()];
+        if (provider) {
+          // Touch the default account for this provider (or all accounts)
+          const accounts = getProviderAccounts(provider);
+          for (const account of accounts) {
+            // Only touch if this is the default account (most likely being used)
+            if (account.isDefault) {
+              touchAccount(provider, account.id);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  const statuses = getAllAuthStatus();
+
+  const authStatus = statuses.map((status) => {
+    const oauthConfig = getOAuthConfig(status.provider);
+    return {
+      provider: status.provider,
+      displayName: oauthConfig.displayName,
+      authenticated: status.authenticated,
+      lastAuth: status.lastAuth?.toISOString() || null,
+      tokenFiles: status.tokenFiles.length,
+      accounts: status.accounts,
+      defaultAccount: status.defaultAccount,
+    };
+  });
+
+  res.json({ authStatus });
+});
+
+// ==================== Account Management ====================
+
+/**
+ * GET /api/cliproxy/accounts - Get all accounts across all providers
+ */
+router.get('/accounts', (_req: Request, res: Response) => {
+  // Initialize accounts from existing tokens
+  initializeAccounts();
+
+  const accounts = getAllAccountsSummary();
+  res.json({ accounts });
+});
+
+/**
+ * GET /api/cliproxy/accounts/:provider - Get accounts for a specific provider
+ */
+router.get('/accounts/:provider', (req: Request, res: Response): void => {
+  const { provider } = req.params;
+
+  // Validate provider
+  if (!validProviders.includes(provider as CLIProxyProvider)) {
+    res.status(400).json({ error: `Invalid provider: ${provider}` });
+    return;
+  }
+
+  const accounts = getProviderAccounts(provider as CLIProxyProvider);
+  res.json({ provider, accounts });
+});
+
+/**
+ * POST /api/cliproxy/accounts/:provider/default - Set default account for provider
+ */
+router.post('/accounts/:provider/default', (req: Request, res: Response): void => {
+  const { provider } = req.params;
+  const { accountId } = req.body;
+
+  if (!accountId) {
+    res.status(400).json({ error: 'Missing required field: accountId' });
+    return;
+  }
+
+  // Validate provider
+  if (!validProviders.includes(provider as CLIProxyProvider)) {
+    res.status(400).json({ error: `Invalid provider: ${provider}` });
+    return;
+  }
+
+  const success = setDefaultAccountFn(provider as CLIProxyProvider, accountId);
+
+  if (success) {
+    res.json({ provider, defaultAccount: accountId });
+  } else {
+    res.status(404).json({ error: 'Account not found' });
+  }
+});
+
+/**
+ * DELETE /api/cliproxy/accounts/:provider/:accountId - Remove an account
+ */
+router.delete('/accounts/:provider/:accountId', (req: Request, res: Response): void => {
+  const { provider, accountId } = req.params;
+
+  // Validate provider
+  if (!validProviders.includes(provider as CLIProxyProvider)) {
+    res.status(400).json({ error: `Invalid provider: ${provider}` });
+    return;
+  }
+
+  const success = removeAccountFn(provider as CLIProxyProvider, accountId);
+
+  if (success) {
+    res.json({ provider, accountId, deleted: true });
+  } else {
+    res.status(404).json({ error: 'Account not found' });
+  }
+});
+
+/**
+ * POST /api/cliproxy/auth/:provider/start - Start OAuth flow for a provider
+ * Opens browser for authentication and returns account info when complete
+ */
+router.post('/:provider/start', async (req: Request, res: Response): Promise<void> => {
+  const { provider } = req.params;
+  const { nickname } = req.body;
+
+  // Validate provider
+  if (!validProviders.includes(provider as CLIProxyProvider)) {
+    res.status(400).json({ error: `Invalid provider: ${provider}` });
+    return;
+  }
+
+  try {
+    // Trigger OAuth flow - this opens browser and waits for completion
+    const account = await triggerOAuth(provider as CLIProxyProvider, {
+      add: true, // Always add mode from UI
+      headless: false, // Force interactive mode
+      nickname: nickname || undefined,
+      fromUI: true, // Enable project selection prompt in UI
+    });
+
+    if (account) {
+      res.json({
+        success: true,
+        account: {
+          id: account.id,
+          email: account.email,
+          nickname: account.nickname,
+          provider: account.provider,
+          isDefault: account.isDefault,
+        },
+      });
+    } else {
+      res.status(400).json({ error: 'Authentication failed or was cancelled' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/cliproxy/auth/project-selection/:sessionId - Get pending project selection prompt
+ * Returns project list for user to select from during OAuth flow
+ */
+router.get('/project-selection/:sessionId', (req: Request, res: Response): void => {
+  const { sessionId } = req.params;
+
+  const pending = getPendingSelection(sessionId);
+  if (pending) {
+    res.json(pending);
+  } else {
+    res.status(404).json({ error: 'No pending project selection for this session' });
+  }
+});
+
+/**
+ * POST /api/cliproxy/auth/project-selection/:sessionId - Submit project selection
+ * Submits user's project choice during OAuth flow
+ */
+router.post('/project-selection/:sessionId', (req: Request, res: Response): void => {
+  const { sessionId } = req.params;
+  const { selectedId } = req.body;
+
+  if (!selectedId && selectedId !== '') {
+    res.status(400).json({ error: 'selectedId is required (use empty string for default)' });
+    return;
+  }
+
+  const success = submitProjectSelection({ sessionId, selectedId });
+  if (success) {
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'No pending project selection for this session' });
+  }
+});
+
+export default router;

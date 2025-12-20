@@ -9,40 +9,10 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import { ui } from '../utils/ui';
+import type { ExecutionResult, ExecutionError, PermissionDenial } from './executor/types';
 
-interface ExecutionResult {
-  profile: string;
-  cwd: string;
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-  duration: number;
-  success: boolean;
-  content?: string;
-  sessionId?: string;
-  totalCost?: number;
-  numTurns?: number;
-  subtype?: string;
-  permissionDenials?: PermissionDenial[];
-  errors?: ErrorInfo[];
-  // json?: any; // Removed: unused parameter
-  timedOut?: boolean;
-}
-
-interface PermissionDenial {
-  tool_name?: string;
-  tool_input?: {
-    command?: string;
-    description?: string;
-    [key: string]: unknown;
-  };
-}
-
-interface ErrorInfo {
-  message?: string;
-  error?: string;
-  [key: string]: unknown;
-}
+// Alias for backward compatibility
+type ErrorInfo = ExecutionError;
 
 interface FileChanges {
   created: string[];

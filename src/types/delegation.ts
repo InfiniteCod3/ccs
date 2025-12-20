@@ -34,19 +34,8 @@ export interface DelegationSessionsRegistry {
   lastSessionId?: string; // Most recent session ID
 }
 
-/**
- * Execution result
- */
-export interface ExecutionResult {
-  exitCode: number;
-  duration: number; // Seconds
-  workingDir: string;
-  sessionId: string;
-  profile: string;
-  model?: string; // Model name from settings
-  cost?: number; // Estimated cost (if available)
-  turns: number;
-}
+// Re-export ExecutionResult from canonical location for backward compatibility
+export type { ExecutionResult } from '../delegation/executor/types';
 
 /**
  * Real-time output event

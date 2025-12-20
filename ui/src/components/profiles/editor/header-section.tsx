@@ -6,10 +6,14 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Save, Loader2, Trash2, RefreshCw } from 'lucide-react';
+import { OpenRouterBadge } from '@/components/profiles/openrouter-badge';
+import { isOpenRouterProfile } from './utils';
+import type { Settings } from './types';
 
 interface HeaderSectionProps {
   profileName: string;
   data: { path?: string; mtime: number } | undefined;
+  settings?: Settings;
   isLoading: boolean;
   isSaving: boolean;
   hasChanges: boolean;
@@ -22,6 +26,7 @@ interface HeaderSectionProps {
 export function HeaderSection({
   profileName,
   data,
+  settings,
   isLoading,
   isSaving,
   hasChanges,
@@ -40,6 +45,7 @@ export function HeaderSection({
               {data.path.replace(/^.*\//, '')}
             </Badge>
           )}
+          {isOpenRouterProfile(settings) && <OpenRouterBadge className="ml-1" />}
         </div>
         {data && (
           <p className="text-xs text-muted-foreground mt-0.5">

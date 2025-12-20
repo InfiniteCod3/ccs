@@ -24,6 +24,7 @@ import {
 import { ProfileEditor } from '@/components/profile-editor';
 import { ProfileCreateDialog } from '@/components/profiles/profile-create-dialog';
 import { useProfiles, useDeleteProfile } from '@/hooks/use-profiles';
+import { useOpenRouterModels } from '@/hooks/use-openrouter-models';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import type { Profile } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,9 @@ export function ApiPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  // Prefetch OpenRouter models when page loads (lazy - won't block render)
+  useOpenRouterModels();
 
   // Memoize profiles to maintain stable reference
   const profiles = useMemo(() => data?.profiles || [], [data?.profiles]);

@@ -139,6 +139,7 @@ export function ProfileEditor({ profileName, onDelete }: ProfileEditorProps) {
       <HeaderSection
         profileName={profileName}
         data={data}
+        settings={currentSettings}
         isLoading={isLoading}
         isSaving={saveMutation.isPending}
         hasChanges={computedHasChanges}
@@ -214,5 +215,5 @@ export { RawEditorSection } from './raw-editor-section';
 export { HeaderSection } from './header-section';
 export { FriendlyUISection } from './friendly-ui-section';
 export { useProfileEditor } from './use-profile-editor';
-export { isSensitiveKey } from './utils';
+export { isSensitiveKey, isOpenRouterProfile, extractTierMapping, applyTierMapping } from './utils';
 export type { Settings, SettingsResponse, ProfileEditorProps } from './types';

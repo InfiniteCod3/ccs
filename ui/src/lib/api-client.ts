@@ -307,16 +307,18 @@ export const api = {
 
     // Multi-account management
     accounts: {
-      list: () => request<{ accounts: ProviderAccountsMap }>('/cliproxy/accounts'),
+      list: () => request<{ accounts: ProviderAccountsMap }>('/cliproxy/auth/accounts'),
       listByProvider: (provider: string) =>
-        request<{ provider: string; accounts: OAuthAccount[] }>(`/cliproxy/accounts/${provider}`),
+        request<{ provider: string; accounts: OAuthAccount[] }>(
+          `/cliproxy/auth/accounts/${provider}`
+        ),
       setDefault: (provider: string, accountId: string) =>
-        request(`/cliproxy/accounts/${provider}/default`, {
+        request(`/cliproxy/auth/accounts/${provider}/default`, {
           method: 'POST',
           body: JSON.stringify({ accountId }),
         }),
       remove: (provider: string, accountId: string) =>
-        request(`/cliproxy/accounts/${provider}/${accountId}`, { method: 'DELETE' }),
+        request(`/cliproxy/auth/accounts/${provider}/${accountId}`, { method: 'DELETE' }),
     },
     // OAuth flow
     auth: {

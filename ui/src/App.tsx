@@ -41,7 +41,7 @@ export default function App() {
               <Route element={<Layout />}>
                 <Route path="/" element={<HomePage />} />
                 <Route path="/analytics" element={<AnalyticsPage />} />
-                <Route path="/api" element={<ApiPage />} />
+                <Route path="/providers" element={<ApiPage />} />
                 <Route path="/cliproxy" element={<CliproxyPage />} />
                 <Route path="/cliproxy/control-panel" element={<CliproxyControlPanelPage />} />
                 <Route path="/copilot" element={<CopilotPage />} />

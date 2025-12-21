@@ -312,3 +312,10 @@
 .animate-border-glow {
   animation: border-glow 2s ease-in-out infinite;
 }
+
+/* Fix Radix ScrollArea viewport overflow issue */
+/* Radix uses inline styles with display: table which causes content to expand beyond container */
+[data-radix-scroll-area-viewport] > div {
+  display: block !important;
+  min-width: 0 !important;
+}

@@ -7,11 +7,14 @@
  * - Downgrade detection in update-command.ts
  * - Edge cases with version parsing
  *
+ * Prerelease convention: X.Y.Z-dev.N is a development version AFTER X.Y.Z
+ * For example: 6.7.1-dev.3 > 6.7.1 (dev version is work toward next release)
+ *
  * Test scenarios to cover:
  * - `5.0.2` < `5.1.0-dev.3` (upgrade to dev)
  * - `5.0.2` > `4.9.0-dev.1` (downgrade to dev)
  * - `5.1.0-dev.1` < `5.1.0-dev.3` (dev-to-dev upgrade)
- * - `5.0.2-dev.1` < `5.0.2` (prerelease < release)
+ * - `5.0.2-dev.1` > `5.0.2` (prerelease > release - dev is work AFTER release)
  * - `5.0.2` = `5.0.2` (same version)
  * - Downgrade warning shown for stable → older dev
  * - Invalid version string handling
@@ -135,14 +138,14 @@ describe('Version Comparison Implementation (Phase 4)', () => {
     });
 
     describe('Prerelease vs Release comparison', function () {
-      it('should treat release versions as newer than prerelease', function () {
-        // 5.0.2 > 5.0.2-dev.1
-        assert.strictEqual(updateCheckerModule.compareVersionsWithPrerelease('5.0.2', '5.0.2-dev.1'), 1);
-        assert.strictEqual(updateCheckerModule.compareVersionsWithPrerelease('5.0.2-dev.1', '5.0.2'), -1);
+      it('should treat prerelease versions as newer than release (dev is work AFTER release)', function () {
+        // 5.0.2-dev.1 > 5.0.2 (dev version is development AFTER 5.0.2)
+        assert.strictEqual(updateCheckerModule.compareVersionsWithPrerelease('5.0.2', '5.0.2-dev.1'), -1);
+        assert.strictEqual(updateCheckerModule.compareVersionsWithPrerelease('5.0.2-dev.1', '5.0.2'), 1);
 
-        // 5.1.0 > 5.1.0-dev.3
-        assert.strictEqual(updateCheckerModule.compareVersionsWithPrerelease('5.1.0', '5.1.0-dev.3'), 1);
-        assert.strictEqual(updateCheckerModule.compareVersionsWithPrerelease('5.1.0-dev.3', '5.1.0'), -1);
+        // 5.1.0-dev.3 > 5.1.0 (dev version is development AFTER 5.1.0)
+        assert.strictEqual(updateCheckerModule.compareVersionsWithPrerelease('5.1.0', '5.1.0-dev.3'), -1);
+        assert.strictEqual(updateCheckerModule.compareVersionsWithPrerelease('5.1.0-dev.3', '5.1.0'), 1);
       });
     });
 
@@ -187,9 +190,9 @@ describe('Version Comparison Implementation (Phase 4)', () => {
           '5.1.0-dev.1 should be less than 5.1.0-dev.3');
       });
 
-      it('should handle `5.0.2-dev.1` < `5.0.2` (prerelease < release)', function () {
-        assert.strictEqual(updateCheckerModule.compareVersionsWithPrerelease('5.0.2-dev.1', '5.0.2'), -1,
-          '5.0.2-dev.1 should be less than 5.0.2');
+      it('should handle `5.0.2-dev.1` > `5.0.2` (prerelease > release - dev is work AFTER release)', function () {
+        assert.strictEqual(updateCheckerModule.compareVersionsWithPrerelease('5.0.2-dev.1', '5.0.2'), 1,
+          '5.0.2-dev.1 should be greater than 5.0.2');
       });
 
       it('should handle `5.0.2` = `5.0.2` (same version)', function () {
@@ -202,13 +205,16 @@ describe('Version Comparison Implementation (Phase 4)', () => {
   describe('Downgrade detection logic tests', () => {
     it('should identify downgrade scenarios correctly', () => {
       // Test the comparison logic that would trigger downgrade warnings
+      // With new semantic: X.Y.Z-dev.N > X.Y.Z (dev is work AFTER release)
       const downgradeScenarios = [
-        ['5.0.2', '4.9.0-dev.1', true],  // stable to older dev
-        ['5.1.0', '5.0.0-dev.5', true],  // newer stable to older dev
+        ['5.0.2', '4.9.0-dev.1', true],  // stable to older dev (base version older)
+        ['5.1.0', '5.0.0-dev.5', true],  // newer stable to older dev (base version older)
         ['5.0.2', '5.0.1', true],        // simple downgrade
         ['5.0.2', '5.0.2', false],       // same version
         ['5.0.2', '5.0.3', false],       // upgrade
         ['5.0.2-dev.1', '5.0.1-dev.2', true], // dev downgrade (base version older)
+        ['5.0.2', '5.0.2-dev.1', false], // upgrade to dev (dev is newer)
+        ['5.0.2-dev.1', '5.0.2', true],  // downgrade from dev to stable
       ];
 
       downgradeScenarios.forEach(([current, latest, isDowngrade]) => {
@@ -221,11 +227,13 @@ describe('Version Comparison Implementation (Phase 4)', () => {
     });
 
     it('should handle beta update warnings scenarios', () => {
+      // With new semantic: X.Y.Z-dev.N > X.Y.Z
       const betaScenarios = [
         ['5.0.2', '5.1.0-dev.3', false], // newer dev version (not downgrade)
         ['5.0.2', '4.9.0-dev.1', true],  // downgrade to older dev
-        ['5.0.2-dev.1', '5.0.2', false], // upgrade to release
+        ['5.0.2-dev.1', '5.0.2', true],  // downgrade from dev to release
         ['5.0.2', '5.0.2', false],       // same version
+        ['5.0.2', '5.0.2-dev.1', false], // upgrade to dev
       ];
 
       betaScenarios.forEach(([current, latest, shouldWarn]) => {
@@ -334,12 +342,13 @@ describe('Version Comparison Implementation (Phase 4)', () => {
 
   describe('Integration tests with version comparison', function () {
     it('should handle complex version comparison scenarios', function () {
+      // With new semantic: X.Y.Z-dev.N > X.Y.Z (dev is work AFTER release)
       const scenarios = [
         // [version1, version2, expected_result, description]
-        ['1.0.0', '1.0.0-alpha.1', 1, 'release > alpha'],
+        ['1.0.0', '1.0.0-alpha.1', -1, 'release < alpha (alpha is work AFTER release)'],
         ['1.0.0-alpha.1', '1.0.0-beta.1', 0, 'alpha = beta (same number, different identifier)'],
         ['1.0.0-beta.1', '1.0.0-rc.1', 0, 'beta = rc (same number, different identifier)'],
-        ['1.0.0-rc.1', '1.0.0', -1, 'rc < release'],
+        ['1.0.0-rc.1', '1.0.0', 1, 'rc > release (rc is work AFTER release)'],
         ['1.0.0-alpha.1', '1.0.0-alpha.2', -1, 'alpha.1 < alpha.2'],
         ['1.0.0-alpha.2', '1.0.0-alpha.1', 1, 'alpha.2 > alpha.1'],
         ['2.0.0-alpha.1', '1.9.9', 1, 'new major prerelease > old release'],

@@ -138,7 +138,7 @@ export function HomePage() {
               value={overview?.profiles ?? 0}
               icon={Key}
               variant="accent"
-              onClick={() => navigate('/api')}
+              onClick={() => navigate('/providers')}
             />
             <InlineStat
               title="CLIProxy"

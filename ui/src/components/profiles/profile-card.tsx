@@ -1,7 +1,10 @@
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { SettingsIcon, PlayIcon } from 'lucide-react';
+import { isOpenRouterProfile } from './editor/utils';
+import type { Settings } from './editor/types';
 
 interface ProfileCardProps {
   profile: {
@@ -12,18 +15,30 @@ interface ProfileCardProps {
     lastUsed?: string;
     model?: string;
   };
+  /** Optional settings for OpenRouter detection */
+  settings?: Settings;
   onSwitch?: () => void;
   onConfig?: () => void;
   onTest?: () => void;
 }
 
-export function ProfileCard({ profile, onSwitch, onConfig, onTest }: ProfileCardProps) {
+export function ProfileCard({ profile, settings, onSwitch, onConfig, onTest }: ProfileCardProps) {
+  const showOpenRouterIcon = isOpenRouterProfile(settings);
+
   return (
     <Card className={profile.isActive ? 'border-primary' : ''}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h3 className="font-semibold">{profile.name}</h3>
+            {showOpenRouterIcon && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <img src="/icons/openrouter.svg" alt="OpenRouter" className="w-4 h-4" />
+                </TooltipTrigger>
+                <TooltipContent>OpenRouter profile</TooltipContent>
+              </Tooltip>
+            )}
             {profile.isActive && (
               <Badge variant="default" className="text-xs">
                 Active

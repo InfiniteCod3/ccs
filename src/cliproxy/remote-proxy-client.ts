@@ -8,7 +8,13 @@
 import * as https from 'https';
 
 /** Error codes for remote proxy status */
-export type RemoteProxyErrorCode = 'CONNECTION_REFUSED' | 'TIMEOUT' | 'AUTH_FAILED' | 'UNKNOWN';
+export type RemoteProxyErrorCode =
+  | 'CONNECTION_REFUSED'
+  | 'TIMEOUT'
+  | 'AUTH_FAILED'
+  | 'DNS_FAILED'
+  | 'NETWORK_UNREACHABLE'
+  | 'UNKNOWN';
 
 /** Status returned from remote proxy health check */
 export interface RemoteProxyStatus {
@@ -46,15 +52,30 @@ export interface RemoteProxyClientConfig {
 /** Default timeout for remote proxy requests (aggressive for CLI UX) */
 const DEFAULT_TIMEOUT_MS = 2000;
 
+/** Default CLIProxyAPI port */
+const DEFAULT_CLIPROXY_PORT = 8317;
+
 /**
- * Get default port for protocol
+ * Get standard web port for protocol (for URL display omission)
+ * These are the ports that browsers/HTTP clients use by default.
+ * HTTP: 80, HTTPS: 443
  */
-function getDefaultPort(protocol: 'http' | 'https'): number {
+function getStandardWebPort(protocol: 'http' | 'https'): number {
   return protocol === 'https' ? 443 : 80;
 }
 
 /**
- * Build URL for remote proxy, intelligently omitting default ports
+ * Get effective port for CLIProxyAPI connection
+ * If port is provided, use it. Otherwise use CLIProxyAPI default (8317).
+ */
+function getEffectivePort(port: number | undefined): number {
+  return port ?? DEFAULT_CLIPROXY_PORT;
+}
+
+/**
+ * Build URL for remote proxy
+ * Only omits port from URL if it matches standard web ports (80/443),
+ * otherwise always includes the port for clarity.
  */
 function buildProxyUrl(
   host: string,
@@ -62,11 +83,12 @@ function buildProxyUrl(
   protocol: 'http' | 'https',
   path: string
 ): string {
-  const defaultPort = getDefaultPort(protocol);
-  const effectivePort = port ?? defaultPort;
+  const effectivePort = getEffectivePort(port);
+  const standardWebPort = getStandardWebPort(protocol);
 
-  // Omit port from URL if it matches the default for the protocol
-  if (effectivePort === defaultPort) {
+  // Only omit port from URL if it matches the standard web port for the protocol
+  // e.g., HTTP on port 80 or HTTPS on port 443
+  if (effectivePort === standardWebPort) {
     return `${protocol}://${host}${path}`;
   }
   return `${protocol}://${host}:${effectivePort}${path}`;
@@ -76,8 +98,8 @@ function buildProxyUrl(
  * Map error to RemoteProxyErrorCode
  *
  * Handles various error types including:
- * - NodeJS.ErrnoException (ECONNREFUSED, ETIMEDOUT)
- * - Fetch errors (AbortError, TypeError)
+ * - NodeJS.ErrnoException (ECONNREFUSED, ETIMEDOUT, ENOTFOUND, ENETUNREACH)
+ * - Fetch errors (AbortError, TypeError, "fetch failed")
  * - HTTP status codes (401, 403)
  */
 function mapErrorToCode(error: Error, statusCode?: number): RemoteProxyErrorCode {
@@ -85,6 +107,27 @@ function mapErrorToCode(error: Error, statusCode?: number): RemoteProxyErrorCode
   // Handle error.code safely - it may be string, number, or undefined
   const rawCode = (error as NodeJS.ErrnoException).code;
   const code = typeof rawCode === 'string' ? rawCode.toLowerCase() : undefined;
+
+  // DNS resolution failed
+  if (
+    code === 'enotfound' ||
+    code === 'eai_again' ||
+    message.includes('getaddrinfo') ||
+    message.includes('dns')
+  ) {
+    return 'DNS_FAILED';
+  }
+
+  // Network unreachable / host unreachable
+  if (
+    code === 'enetunreach' ||
+    code === 'ehostunreach' ||
+    code === 'enetdown' ||
+    message.includes('network') ||
+    message.includes('unreachable')
+  ) {
+    return 'NETWORK_UNREACHABLE';
+  }
 
   // Connection refused
   if (code === 'econnrefused' || message.includes('connection refused')) {
@@ -106,6 +149,17 @@ function mapErrorToCode(error: Error, statusCode?: number): RemoteProxyErrorCode
     return 'AUTH_FAILED';
   }
 
+  // Generic "fetch failed" - try to extract cause
+  if (message.includes('fetch failed') || message.includes('failed to fetch')) {
+    // Check if there's a cause property (Node.js 18+)
+    const cause = (error as Error & { cause?: Error }).cause;
+    if (cause) {
+      return mapErrorToCode(cause);
+    }
+    // Likely network/DNS issue if no specific cause
+    return 'NETWORK_UNREACHABLE';
+  }
+
   return 'UNKNOWN';
 }
 
@@ -117,11 +171,15 @@ function getErrorMessage(errorCode: RemoteProxyErrorCode, rawError?: string): st
     case 'CONNECTION_REFUSED':
       return 'Connection refused - is the proxy running?';
     case 'TIMEOUT':
-      return 'Connection timed out';
+      return 'Connection timed out - server may be slow or unreachable';
     case 'AUTH_FAILED':
       return 'Authentication failed - check auth token';
+    case 'DNS_FAILED':
+      return 'DNS lookup failed - check hostname';
+    case 'NETWORK_UNREACHABLE':
+      return 'Network unreachable - check if host is on same network';
     default:
-      return rawError || 'Unknown error';
+      return rawError || 'Connection failed';
   }
 }
 
@@ -138,6 +196,9 @@ function createHttpsAgent(allowSelfSigned: boolean): https.Agent | undefined {
 
 /**
  * Check health of remote CLIProxyAPI instance
+ *
+ * Uses /v1/models endpoint for health check since CLIProxyAPI doesn't expose /health.
+ * This endpoint is always available and returns 200 when the server is operational.
  *
  * @param config Remote proxy client configuration
  * @returns RemoteProxyStatus with reachability and latency
@@ -157,8 +218,8 @@ export async function checkRemoteProxy(
     };
   }
 
-  // Use smart URL building - omit port if it's the default for the protocol
-  const url = buildProxyUrl(host, port, protocol, '/health');
+  // Use /v1/models as health check - CLIProxyAPI doesn't have /health endpoint
+  const url = buildProxyUrl(host, port, protocol, '/v1/models');
   const startTime = Date.now();
 
   try {

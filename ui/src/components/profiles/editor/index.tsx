@@ -21,6 +21,7 @@ export function ProfileEditor({ profileName, onDelete }: ProfileEditorProps) {
   const [conflictDialog, setConflictDialog] = useState(false);
   const [rawJsonEdits, setRawJsonEdits] = useState<string | null>(null);
   const [newEnvKey, setNewEnvKey] = useState('');
+  const [newEnvValue, setNewEnvValue] = useState('');
   const queryClient = useQueryClient();
 
   // Fetch settings for selected profile
@@ -66,13 +67,22 @@ export function ProfileEditor({ profileName, onDelete }: ProfileEditorProps) {
     setRawJsonEdits(JSON.stringify({ ...currentSettings, env: newEnv }, null, 2));
   };
 
+  // Bulk update multiple env vars at once (avoids race conditions)
+  const updateEnvBulk = (env: Record<string, string>) => {
+    const newEnv = { ...(currentSettings?.env || {}), ...env };
+    setLocalEdits((prev) => ({ ...prev, ...env }));
+    setRawJsonEdits(JSON.stringify({ ...currentSettings, env: newEnv }, null, 2));
+  };
+
   const addNewEnvVar = () => {
     if (!newEnvKey.trim()) return;
     const key = newEnvKey.trim();
-    const newEnv = { ...(currentSettings?.env || {}), [key]: '' };
-    setLocalEdits((prev) => ({ ...prev, [key]: '' }));
+    const value = newEnvValue;
+    const newEnv = { ...(currentSettings?.env || {}), [key]: value };
+    setLocalEdits((prev) => ({ ...prev, [key]: value }));
     setRawJsonEdits(JSON.stringify({ ...currentSettings, env: newEnv }, null, 2));
     setNewEnvKey('');
+    setNewEnvValue('');
   };
 
   // Computed validity and changes check
@@ -139,6 +149,7 @@ export function ProfileEditor({ profileName, onDelete }: ProfileEditorProps) {
       <HeaderSection
         profileName={profileName}
         data={data}
+        settings={currentSettings}
         isLoading={isLoading}
         isSaving={saveMutation.isPending}
         hasChanges={computedHasChanges}
@@ -165,14 +176,17 @@ export function ProfileEditor({ profileName, onDelete }: ProfileEditorProps) {
         </div>
       ) : (
         <div className="flex-1 grid grid-cols-[40%_60%] divide-x overflow-hidden">
-          <div className="flex flex-col overflow-hidden bg-muted/5">
+          <div className="flex flex-col overflow-hidden bg-muted/5 min-w-0">
             <FriendlyUISection
               profileName={profileName}
               data={data}
               currentSettings={currentSettings}
               newEnvKey={newEnvKey}
+              newEnvValue={newEnvValue}
               onNewEnvKeyChange={setNewEnvKey}
+              onNewEnvValueChange={setNewEnvValue}
               onEnvValueChange={updateEnvValue}
+              onEnvBulkChange={updateEnvBulk}
               onAddEnvVar={addNewEnvVar}
             />
           </div>
@@ -214,5 +228,5 @@ export { RawEditorSection } from './raw-editor-section';
 export { HeaderSection } from './header-section';
 export { FriendlyUISection } from './friendly-ui-section';
 export { useProfileEditor } from './use-profile-editor';
-export { isSensitiveKey } from './utils';
+export { isSensitiveKey, isOpenRouterProfile, extractTierMapping, applyTierMapping } from './utils';
 export type { Settings, SettingsResponse, ProfileEditorProps } from './types';

@@ -68,12 +68,9 @@ function validateConfiguration() {
     errors.push('~/.ccs/ directory not found');
   }
 
-  // Check required files
+  // Check required files (GLM/GLMT/Kimi are now optional - created via presets)
   const requiredFiles = [
-    { path: path.join(ccsDir, 'config.json'), name: 'config.json' },
-    { path: path.join(ccsDir, 'glm.settings.json'), name: 'glm.settings.json' },
-    { path: path.join(ccsDir, 'glmt.settings.json'), name: 'glmt.settings.json' },
-    { path: path.join(ccsDir, 'kimi.settings.json'), name: 'kimi.settings.json' }
+    { path: path.join(ccsDir, 'config.json'), name: 'config.json' }
   ];
 
   for (const file of requiredFiles) {
@@ -156,17 +153,15 @@ function createConfigFiles() {
     // Create config.json if missing
     // NOTE: gemini/codex profiles NOT included - they are added on-demand when user
     // runs `ccs gemini` or `ccs codex` for first time (requires OAuth auth first)
+    // NOTE: GLM/GLMT/Kimi profiles are now created via UI/CLI presets, not auto-created
     const configPath = path.join(ccsDir, 'config.json');
     if (!fs.existsSync(configPath)) {
       // NOTE: No 'default' entry - when no profile specified, CCS passes through
       // to Claude's native auth without --settings flag. This prevents env var
       // pollution from affecting the default profile.
+      // Profiles are empty by default - users create via `ccs api create --preset` or UI
       const config = {
-        profiles: {
-          glm: '~/.ccs/glm.settings.json',
-          glmt: '~/.ccs/glmt.settings.json',
-          kimi: '~/.ccs/kimi.settings.json'
-        }
+        profiles: {}
       };
 
       // Atomic write: temp file → rename
@@ -213,216 +208,12 @@ function createConfigFiles() {
       }
     }
 
-    // Create glm.settings.json if missing
-    const glmSettingsPath = path.join(ccsDir, 'glm.settings.json');
-    if (!fs.existsSync(glmSettingsPath)) {
-      const glmSettings = {
-        env: {
-          ANTHROPIC_BASE_URL: 'https://api.z.ai/api/anthropic',
-          ANTHROPIC_AUTH_TOKEN: 'YOUR_GLM_API_KEY_HERE',
-          ANTHROPIC_MODEL: 'glm-4.6',
-          ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-4.6',
-          ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-4.6',
-          ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-4.6'
-        }
-      };
-
-      // Atomic write
-      const tmpPath = `${glmSettingsPath}.tmp`;
-      fs.writeFileSync(tmpPath, JSON.stringify(glmSettings, null, 2) + '\n', 'utf8');
-      fs.renameSync(tmpPath, glmSettingsPath);
-
-      console.log('[OK] Created GLM profile: ~/.ccs/glm.settings.json');
-      console.log('');
-      console.log('  [!] Configure GLM API key:');
-      console.log('      1. Get key from: https://api.z.ai');
-      console.log('      2. Edit: ~/.ccs/glm.settings.json');
-      console.log('      3. Replace: YOUR_GLM_API_KEY_HERE');
-    } else {
-      console.log('[OK] GLM profile exists: ~/.ccs/glm.settings.json (preserved)');
-    }
-
-    // Create glmt.settings.json if missing
-    const glmtSettingsPath = path.join(ccsDir, 'glmt.settings.json');
-    if (!fs.existsSync(glmtSettingsPath)) {
-      const glmtSettings = {
-        env: {
-          ANTHROPIC_BASE_URL: 'https://api.z.ai/api/coding/paas/v4/chat/completions',
-          ANTHROPIC_AUTH_TOKEN: 'YOUR_GLM_API_KEY_HERE',
-          ANTHROPIC_MODEL: 'glm-4.6',
-          ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-4.6',
-          ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-4.6',
-          ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-4.6',
-          ANTHROPIC_TEMPERATURE: '0.2',
-          ANTHROPIC_MAX_TOKENS: '65536',
-          MAX_THINKING_TOKENS: '32768',
-          ENABLE_STREAMING: 'true',
-          ANTHROPIC_SAFE_MODE: 'false',
-          API_TIMEOUT_MS: '3000000'
-        },
-        alwaysThinkingEnabled: true
-      };
-
-      // Atomic write
-      const tmpPath = `${glmtSettingsPath}.tmp`;
-      fs.writeFileSync(tmpPath, JSON.stringify(glmtSettings, null, 2) + '\n', 'utf8');
-      fs.renameSync(tmpPath, glmtSettingsPath);
-
-      console.log('[OK] Created GLMT profile: ~/.ccs/glmt.settings.json');
-      console.log('');
-      console.log('  [!] Configure GLMT API key:');
-      console.log('      1. Get key from: https://api.z.ai');
-      console.log('      2. Edit: ~/.ccs/glmt.settings.json');
-      console.log('      3. Replace: YOUR_GLM_API_KEY_HERE');
-      console.log('      Note: GLMT enables GLM thinking mode (reasoning)');
-      console.log('      Defaults: Temperature 0.2, thinking enabled, 50min timeout');
-    } else {
-      console.log('[OK] GLMT profile exists: ~/.ccs/glmt.settings.json (preserved)');
-    }
-
-    // Migrate existing GLMT configs to include new defaults (v3.3.0)
-    if (fs.existsSync(glmtSettingsPath)) {
-      try {
-        const existing = JSON.parse(fs.readFileSync(glmtSettingsPath, 'utf8'));
-        let updated = false;
-
-        // Ensure env object exists
-        if (!existing.env) {
-          existing.env = {};
-          updated = true;
-        }
-
-        // Add missing env vars (preserve existing values)
-        const envDefaults = {
-          ANTHROPIC_TEMPERATURE: '0.2',
-          ANTHROPIC_MAX_TOKENS: '65536',
-          MAX_THINKING_TOKENS: '32768',
-          ENABLE_STREAMING: 'true',
-          ANTHROPIC_SAFE_MODE: 'false',
-          API_TIMEOUT_MS: '3000000'
-        };
-
-        for (const [key, value] of Object.entries(envDefaults)) {
-          if (existing.env[key] === undefined) {
-            existing.env[key] = value;
-            updated = true;
-          }
-        }
-
-        // Add alwaysThinkingEnabled if missing
-        if (existing.alwaysThinkingEnabled === undefined) {
-          existing.alwaysThinkingEnabled = true;
-          updated = true;
-        }
-
-        // Write back if updated
-        if (updated) {
-          const tmpPath = `${glmtSettingsPath}.tmp`;
-          fs.writeFileSync(tmpPath, JSON.stringify(existing, null, 2) + '\n', 'utf8');
-          fs.renameSync(tmpPath, glmtSettingsPath);
-          console.log('[OK] Migrated GLMT config with new defaults (v3.3.0)');
-          console.log('     Added: temperature, max_tokens, thinking settings, alwaysThinkingEnabled');
-        }
-      } catch (err) {
-        console.warn('[!] GLMT config migration failed:', err.message);
-        console.warn('    Existing config preserved, may be missing new defaults');
-        console.warn('    You can manually add fields or delete file to regenerate');
-      }
-    }
-
-    // Create kimi.settings.json if missing
-    const kimiSettingsPath = path.join(ccsDir, 'kimi.settings.json');
-    if (!fs.existsSync(kimiSettingsPath)) {
-      const kimiSettings = {
-        env: {
-          ANTHROPIC_BASE_URL: 'https://api.kimi.com/coding/',
-          ANTHROPIC_AUTH_TOKEN: 'YOUR_KIMI_API_KEY_HERE',
-          ANTHROPIC_MODEL: 'kimi-k2-thinking-turbo',
-          ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-k2-thinking-turbo',
-          ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-k2-thinking-turbo',
-          ANTHROPIC_DEFAULT_HAIKU_MODEL: 'kimi-k2-thinking-turbo'
-        },
-        alwaysThinkingEnabled: true
-      };
-
-      // Atomic write
-      const tmpPath = `${kimiSettingsPath}.tmp`;
-      fs.writeFileSync(tmpPath, JSON.stringify(kimiSettings, null, 2) + '\n', 'utf8');
-      fs.renameSync(tmpPath, kimiSettingsPath);
-
-      console.log('[OK] Created Kimi profile: ~/.ccs/kimi.settings.json');
-      console.log('');
-      console.log('  [!] Configure Kimi API key:');
-      console.log('      1. Get key from: https://www.kimi.com/coding (membership page)');
-      console.log('      2. Edit: ~/.ccs/kimi.settings.json');
-      console.log('      3. Replace: YOUR_KIMI_API_KEY_HERE');
-    } else {
-      console.log('[OK] Kimi profile exists: ~/.ccs/kimi.settings.json (preserved)');
-    }
-
-    // NOTE: gemini.settings.json and codex.settings.json are NOT created during install
-    // They are created on-demand when user runs `ccs gemini` or `ccs codex` for the first time
-    // This prevents confusion - users need to run `--auth` first anyway
-
-    // Migrate existing Kimi configs to use kimi-k2-thinking-turbo model (v5.5.0)
-    // Kimi API now supports model specification with thinking models
-    if (fs.existsSync(kimiSettingsPath)) {
-      try {
-        const existing = JSON.parse(fs.readFileSync(kimiSettingsPath, 'utf8'));
-        let updated = false;
-        const defaultModel = 'kimi-k2-thinking-turbo';
-
-        // Ensure env object exists
-        if (!existing.env) {
-          existing.env = {};
-          updated = true;
-        }
-
-        // Add/update model fields to use kimi-k2-thinking-turbo
-        const modelFields = {
-          ANTHROPIC_MODEL: defaultModel,
-          ANTHROPIC_DEFAULT_OPUS_MODEL: defaultModel,
-          ANTHROPIC_DEFAULT_SONNET_MODEL: defaultModel,
-          ANTHROPIC_DEFAULT_HAIKU_MODEL: defaultModel
-        };
-
-        for (const [field, value] of Object.entries(modelFields)) {
-          if (existing.env[field] !== value) {
-            existing.env[field] = value;
-            updated = true;
-          }
-        }
-
-        // Remove deprecated ANTHROPIC_SMALL_FAST_MODEL if present
-        if (existing.env.ANTHROPIC_SMALL_FAST_MODEL !== undefined) {
-          delete existing.env.ANTHROPIC_SMALL_FAST_MODEL;
-          updated = true;
-        }
-
-        // Ensure required fields exist
-        if (!existing.env.ANTHROPIC_BASE_URL) {
-          existing.env.ANTHROPIC_BASE_URL = 'https://api.kimi.com/coding/';
-          updated = true;
-        }
-
-        // Add alwaysThinkingEnabled if missing
-        if (existing.alwaysThinkingEnabled === undefined) {
-          existing.alwaysThinkingEnabled = true;
-          updated = true;
-        }
-
-        // Write back if updated
-        if (updated) {
-          const tmpPath = `${kimiSettingsPath}.tmp`;
-          fs.writeFileSync(tmpPath, JSON.stringify(existing, null, 2) + '\n', 'utf8');
-          fs.renameSync(tmpPath, kimiSettingsPath);
-          console.log('[OK] Migrated Kimi config (v5.5.0): updated to kimi-k2-thinking-turbo model');
-        }
-      } catch (err) {
-        console.warn('[!] Kimi config migration failed:', err.message);
-        console.warn('    Existing config preserved');
-      }
-    }
+    // NOTE: GLM, GLMT, and Kimi profiles are NO LONGER auto-created during install
+    // Users can create these via:
+    //   - UI: Profile Create Dialog → Provider Presets
+    //   - CLI: ccs api create --preset glm|glmt|kimi
+    // This gives users control over which providers they want to use
+    // Existing profiles are preserved for backward compatibility
 
     // Copy shell completion files to ~/.ccs/completions/
     const completionsDir = path.join(ccsDir, 'completions');

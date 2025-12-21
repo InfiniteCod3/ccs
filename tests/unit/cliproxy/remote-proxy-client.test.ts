@@ -47,18 +47,29 @@ describe('remote-proxy-client', () => {
 
   describe('RemoteProxyErrorCode', () => {
     it('should define expected error codes', () => {
-      const validCodes = ['CONNECTION_REFUSED', 'TIMEOUT', 'AUTH_FAILED', 'UNKNOWN'];
+      const validCodes = [
+        'CONNECTION_REFUSED',
+        'TIMEOUT',
+        'AUTH_FAILED',
+        'DNS_FAILED',
+        'NETWORK_UNREACHABLE',
+        'UNKNOWN',
+      ];
 
       // Type-level test - ensure error codes can be used
       const status1: RemoteProxyStatus = { reachable: false, errorCode: 'CONNECTION_REFUSED' };
       const status2: RemoteProxyStatus = { reachable: false, errorCode: 'TIMEOUT' };
       const status3: RemoteProxyStatus = { reachable: false, errorCode: 'AUTH_FAILED' };
       const status4: RemoteProxyStatus = { reachable: false, errorCode: 'UNKNOWN' };
+      const status5: RemoteProxyStatus = { reachable: false, errorCode: 'DNS_FAILED' };
+      const status6: RemoteProxyStatus = { reachable: false, errorCode: 'NETWORK_UNREACHABLE' };
 
       expect(validCodes).toContain(status1.errorCode);
       expect(validCodes).toContain(status2.errorCode);
       expect(validCodes).toContain(status3.errorCode);
       expect(validCodes).toContain(status4.errorCode);
+      expect(validCodes).toContain(status5.errorCode);
+      expect(validCodes).toContain(status6.errorCode);
     });
   });
 
@@ -105,14 +116,15 @@ describe('remote-proxy-client', () => {
   });
 
   describe('health check URL construction', () => {
-    it('should construct correct health check URL pattern', () => {
+    // CLIProxyAPI uses /v1/models for health checks (no /health endpoint)
+    it('should construct correct health check URL pattern using /v1/models', () => {
       const config: RemoteProxyClientConfig = {
         host: '192.168.1.100',
         port: 8317,
         protocol: 'http',
       };
-      const expectedUrl = `${config.protocol}://${config.host}:${config.port}/health`;
-      expect(expectedUrl).toBe('http://192.168.1.100:8317/health');
+      const expectedUrl = `${config.protocol}://${config.host}:${config.port}/v1/models`;
+      expect(expectedUrl).toBe('http://192.168.1.100:8317/v1/models');
     });
 
     it('should construct HTTPS URL when protocol is https', () => {
@@ -121,8 +133,8 @@ describe('remote-proxy-client', () => {
         port: 443,
         protocol: 'https',
       };
-      const expectedUrl = `${config.protocol}://${config.host}:${config.port}/health`;
-      expect(expectedUrl).toBe('https://secure.example.com:443/health');
+      const expectedUrl = `${config.protocol}://${config.host}:${config.port}/v1/models`;
+      expect(expectedUrl).toBe('https://secure.example.com:443/v1/models');
     });
   });
 });

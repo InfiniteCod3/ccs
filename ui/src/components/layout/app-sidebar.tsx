@@ -31,6 +31,7 @@ import {
 import { CcsLogo } from '@/components/shared/ccs-logo';
 import { useSidebar } from '@/hooks/use-sidebar';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Define navigation groups
 const navGroups = [
@@ -44,7 +45,12 @@ const navGroups = [
   {
     title: 'Identity & Access',
     items: [
-      { path: '/api', icon: Key, label: 'API Profiles' },
+      {
+        path: '/providers',
+        icon: Key,
+        label: 'API Profiles',
+        badge: { text: 'OpenRouter', icon: '/icons/openrouter.svg' },
+      },
       {
         path: '/cliproxy',
         icon: Zap,
@@ -147,7 +153,28 @@ export function AppSidebar() {
                       >
                         <Link to={item.path}>
                           {item.icon && <item.icon className="w-4 h-4" />}
-                          <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                          <span className="group-data-[collapsible=icon]:hidden flex-1">
+                            {item.label}
+                          </span>
+                          {item.badge && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span
+                                  className={`group-data-[collapsible=icon]:hidden ml-auto flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                                    isRouteActive(item.path)
+                                      ? 'bg-sidebar-accent-foreground/20 text-sidebar-accent-foreground border border-sidebar-accent-foreground/30'
+                                      : 'bg-accent/15 text-accent border border-accent/30 group-hover/menu-item:bg-sidebar-accent-foreground/20 group-hover/menu-item:text-sidebar-accent-foreground group-hover/menu-item:border-sidebar-accent-foreground/30'
+                                  }`}
+                                >
+                                  <img src={item.badge.icon} alt="" className="w-3 h-3" />
+                                  <span className="hidden sm:inline">{item.badge.text}</span>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="right">
+                                <p>349+ models via OpenRouter</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
                         </Link>
                       </SidebarMenuButton>
                     )}

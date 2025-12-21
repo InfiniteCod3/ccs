@@ -80,6 +80,10 @@ export function compareVersions(v1: string, v2: string): number {
 
 /**
  * Compare versions with prerelease support
+ *
+ * Prerelease convention: X.Y.Z-dev.N is a development version AFTER X.Y.Z
+ * For example: 6.7.1-dev.3 > 6.7.1 (dev version is work toward next release)
+ *
  * @returns 1 if v1 > v2 (upgrade), -1 if v1 < v2 (downgrade), 0 if equal
  */
 export function compareVersionsWithPrerelease(v1: string, v2: string): number {
@@ -92,9 +96,9 @@ export function compareVersionsWithPrerelease(v1: string, v2: string): number {
   if (p1.patch !== p2.patch) return p1.patch > p2.patch ? 1 : -1;
 
   // Same base version - check prerelease
-  // Release > prerelease (5.0.2 > 5.0.2-dev.1)
-  if (p1.prerelease === null && p2.prerelease !== null) return 1;
-  if (p1.prerelease !== null && p2.prerelease === null) return -1;
+  // Prerelease (dev) > Release: 6.7.1-dev.3 > 6.7.1 (dev is work AFTER release)
+  if (p1.prerelease !== null && p2.prerelease === null) return 1;
+  if (p1.prerelease === null && p2.prerelease !== null) return -1;
 
   // Both are prereleases - compare prerelease numbers
   if (p1.prereleaseNum !== null && p2.prereleaseNum !== null) {

@@ -11,8 +11,12 @@ import {
   saveUnifiedConfig,
   isUnifiedMode,
 } from '../../config/unified-config-loader';
-import { deleteAllProfileSecrets } from '../../config/secrets-manager';
 import type { ModelMapping, CreateApiProfileResult, RemoveApiProfileResult } from './profile-types';
+
+/** Check if URL is an OpenRouter endpoint */
+function isOpenRouterUrl(baseUrl: string): boolean {
+  return baseUrl.toLowerCase().includes('openrouter.ai');
+}
 
 /** Create settings.json file for API profile (legacy format) */
 function createSettingsFile(
@@ -32,6 +36,8 @@ function createSettingsFile(
       ANTHROPIC_DEFAULT_OPUS_MODEL: models.opus,
       ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnet,
       ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haiku,
+      // OpenRouter requires explicitly blanking the API key to prevent conflicts
+      ...(isOpenRouterUrl(baseUrl) && { ANTHROPIC_API_KEY: '' }),
     },
   };
 
@@ -83,6 +89,8 @@ function createApiProfileUnified(
       ANTHROPIC_DEFAULT_OPUS_MODEL: models.opus,
       ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnet,
       ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haiku,
+      // OpenRouter requires explicitly blanking the API key to prevent conflicts
+      ...(isOpenRouterUrl(baseUrl) && { ANTHROPIC_API_KEY: '' }),
     },
   };
 
@@ -152,9 +160,6 @@ function removeApiProfileUnified(name: string): void {
   }
 
   saveUnifiedConfig(config);
-
-  // Remove any legacy secrets
-  deleteAllProfileSecrets(name);
 }
 
 /** Remove API profile from legacy config */

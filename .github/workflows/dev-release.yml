@@ -82,22 +82,31 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Get version from package.json (updated by semantic-release)
+          # Get version from package.json
           VERSION=$(jq -r '.version' package.json)
 
-          # Find commits since last release
-          LAST_RELEASE=$(git log --oneline --grep="chore(release):" -n 2 | tail -1 | cut -d' ' -f1)
-          RANGE="${LAST_RELEASE:-HEAD~20}..HEAD"
+          # Get commits ONLY since last dev tag (not all release commits)
+          # This prevents re-tagging issues from older releases
+          LAST_DEV_TAG=$(git tag -l "v*-dev.*" --sort=-v:refname | head -1 || echo "")
+
+          if [ -n "$LAST_DEV_TAG" ]; then
+            # Commits between last dev tag and current (excluding release commit)
+            RANGE="${LAST_DEV_TAG}..HEAD~1"
+          else
+            # First dev release - check commits since last stable tag
+            STABLE_TAG=$(git tag -l "v[0-9]*.[0-9]*.[0-9]" --merged origin/main --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || echo "")
+            RANGE="${STABLE_TAG:-HEAD~10}..HEAD~1"
+          fi
 
           echo "Checking commits in range: $RANGE"
 
-          # Extract issue numbers
-          ISSUES=$(git log $RANGE --pretty=format:"%s %b" | \
+          # Extract issue numbers from commit messages
+          ISSUES=$(git log $RANGE --pretty=format:"%s %b" 2>/dev/null | \
             grep -oE "(Fixes|Closes|Resolves|Refs?) #[0-9]+" | \
             grep -oE "#[0-9]+" | sort -u || true)
 
           if [[ -z "$ISSUES" ]]; then
-            echo "No linked issues found"
+            echo "No linked issues found in range"
             exit 0
           fi
 
@@ -110,13 +119,16 @@ jobs:
           for ISSUE in $ISSUES; do
             NUM=${ISSUE#\#}
 
-            # Skip if already tagged
-            if gh issue view "$NUM" --repo "${{ github.repository }}" --json labels --jq '.labels[].name' | grep -q "released-dev"; then
-              echo "Issue #$NUM already tagged, skipping"
+            # Skip if already has ANY release label (prevents duplicate comments)
+            RELEASE_LABELS=$(gh issue view "$NUM" --repo "${{ github.repository }}" --json labels --jq '[.labels[].name | select(startswith("released"))] | length' 2>/dev/null || echo "0")
+            if [[ "$RELEASE_LABELS" -gt 0 ]]; then
+              echo "Issue #$NUM already released, skipping"
               continue
             fi
 
             echo "Tagging issue #$NUM"
-            gh issue comment "$NUM" --repo "${{ github.repository }}" --body "[i] Available in \`$VERSION\`. Update: \`ccs update --dev\`" || true
-            gh issue edit "$NUM" --add-label "released-dev" --repo "${{ github.repository }}" || true
+            # Remove pending-release (transition), add released-dev
+            gh issue edit "$NUM" --remove-label "pending-release" --add-label "released-dev" --repo "${{ github.repository }}" 2>/dev/null || \
+              gh issue edit "$NUM" --add-label "released-dev" --repo "${{ github.repository }}" || true
+            gh issue comment "$NUM" --repo "${{ github.repository }}" --body "[bot] Available in \`$VERSION\`. Install: \`ccs update --dev\`" || true
           done

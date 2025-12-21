@@ -30,11 +30,18 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
   const [showLoginHint, setShowLoginHint] = useState(true);
 
   // Fetch cliproxy_server config for remote/local mode detection
-  const { data: cliproxyConfig } = useQuery<CliproxyServerConfig>({
+  const { data: cliproxyConfig, error: configError } = useQuery<CliproxyServerConfig>({
     queryKey: ['cliproxy-server-config'],
     queryFn: () => api.cliproxyServer.get(),
     staleTime: 30000, // 30 seconds
   });
+
+  // Log config fetch errors (fallback to local mode on error)
+  useEffect(() => {
+    if (configError) {
+      console.warn('[ControlPanelEmbed] Config fetch failed, using local mode:', configError);
+    }
+  }, [configError]);
 
   // Calculate URLs and settings based on remote or local mode
   const { managementUrl, checkUrl, authToken, isRemote, displayHost } = useMemo(() => {
@@ -72,10 +79,12 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
 
   // Check if CLIProxy is running
   useEffect(() => {
+    const controller = new AbortController();
+
     const checkConnection = async () => {
       try {
         const response = await fetch(checkUrl, {
-          signal: AbortSignal.timeout(2000),
+          signal: controller.signal,
         });
         if (response.ok) {
           setIsConnected(true);
@@ -88,7 +97,10 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
               : 'CLIProxy returned an error'
           );
         }
-      } catch {
+      } catch (e) {
+        // Ignore abort errors (component unmounting)
+        if (e instanceof Error && e.name === 'AbortError') return;
+
         setIsConnected(false);
         setError(
           isRemote
@@ -98,7 +110,12 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
       }
     };
 
-    checkConnection();
+    // Start connection check with timeout
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    checkConnection().finally(() => clearTimeout(timeoutId));
+
+    // Cleanup: abort fetch on unmount
+    return () => controller.abort();
   }, [checkUrl, isRemote, displayHost]);
 
   // Handle iframe load - attempt to auto-login via postMessage
@@ -112,6 +129,14 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
       try {
         // Derive apiBase from checkUrl (remove trailing slash)
         const apiBase = checkUrl.replace(/\/$/, '');
+
+        // Security: Validate iframe src matches target origin before sending credentials
+        const iframeSrc = iframeRef.current.src;
+        if (!iframeSrc.startsWith(apiBase)) {
+          console.warn('[ControlPanelEmbed] Iframe origin mismatch, skipping postMessage');
+          return;
+        }
+
         // Send credentials to iframe
         iframeRef.current.contentWindow.postMessage(
           {
@@ -121,15 +146,17 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
           },
           apiBase
         );
-      } catch {
+      } catch (e) {
         // Cross-origin restriction - expected if not same origin
-        console.debug('[ControlPanelEmbed] postMessage failed - cross-origin');
+        console.debug('[ControlPanelEmbed] postMessage failed - cross-origin:', e);
       }
     }
   }, [checkUrl, authToken]);
 
   const handleRefresh = () => {
     setIsLoading(true);
+    setError(null);
+    setIsConnected(false);
     if (iframeRef.current) {
       iframeRef.current.src = managementUrl;
     }
@@ -187,7 +214,9 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
             <span>
               Key:{' '}
               <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded font-mono font-semibold">
-                {authToken || 'ccs'}
+                {authToken && authToken.length > 4
+                  ? `***${authToken.slice(-4)}`
+                  : authToken || 'ccs'}
               </code>
             </span>
             <button

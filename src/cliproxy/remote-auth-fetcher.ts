@@ -10,6 +10,9 @@ import {
   ProxyTarget,
 } from './proxy-target-resolver';
 
+/** Timeout for remote fetch requests (ms) */
+const REMOTE_FETCH_TIMEOUT_MS = 5000;
+
 /** Remote auth file from CLIProxyAPI /v0/management/auth-files */
 interface RemoteAuthFile {
   id: string;
@@ -19,11 +22,6 @@ interface RemoteAuthFile {
   email?: string;
   status: 'active' | 'disabled' | 'unavailable';
   source: 'file' | 'memory';
-}
-
-/** Response from CLIProxyAPI auth-files endpoint */
-interface RemoteAuthFilesResponse {
-  files: RemoteAuthFile[];
 }
 
 /** Account info for UI display */
@@ -39,7 +37,6 @@ export interface RemoteAuthStatus {
   provider: string;
   displayName: string;
   authenticated: boolean;
-  lastAuth: string | null;
   tokenFiles: number;
   accounts: RemoteAccountInfo[];
   defaultAccount: string | null;
@@ -78,7 +75,7 @@ export async function fetchRemoteAuthStatus(target?: ProxyTarget): Promise<Remot
   const url = buildProxyUrl(proxyTarget, '/v0/management/auth-files');
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  const timeoutId = setTimeout(() => controller.abort(), REMOTE_FETCH_TIMEOUT_MS);
 
   try {
     const response = await fetch(url, {
@@ -95,8 +92,14 @@ export async function fetchRemoteAuthStatus(target?: ProxyTarget): Promise<Remot
       throw new Error(`Remote returned ${response.status}: ${response.statusText}`);
     }
 
-    const data = (await response.json()) as RemoteAuthFilesResponse;
-    return transformRemoteAuthFiles(data.files);
+    const data: unknown = await response.json();
+
+    // Validate response structure
+    if (!data || typeof data !== 'object' || !('files' in data) || !Array.isArray(data.files)) {
+      throw new Error('Invalid response format from remote auth endpoint');
+    }
+
+    return transformRemoteAuthFiles(data.files as RemoteAuthFile[]);
   } catch (error) {
     clearTimeout(timeoutId);
 
@@ -107,13 +110,19 @@ export async function fetchRemoteAuthStatus(target?: ProxyTarget): Promise<Remot
   }
 }
 
-/** Transform CLIProxyAPI auth files to CCS AuthStatus format */
+/**
+ * Transform CLIProxyAPI auth files to CCS AuthStatus format
+ * @param files Array of auth files from remote API
+ */
 function transformRemoteAuthFiles(files: RemoteAuthFile[]): RemoteAuthStatus[] {
   const byProvider = new Map<string, RemoteAuthFile[]>();
 
   for (const file of files) {
     const provider = PROVIDER_MAP[file.provider.toLowerCase()];
-    if (!provider) continue;
+    if (!provider) {
+      // Unknown provider, skip (could add logging in debug mode)
+      continue;
+    }
 
     const existing = byProvider.get(provider);
     if (existing) {
@@ -125,11 +134,11 @@ function transformRemoteAuthFiles(files: RemoteAuthFile[]): RemoteAuthStatus[] {
 
   const result: RemoteAuthStatus[] = [];
 
-  Array.from(byProvider.entries()).forEach(([provider, providerFiles]) => {
+  for (const [provider, providerFiles] of byProvider) {
     const activeFiles = providerFiles.filter((f) => f.status === 'active');
     const accounts: RemoteAccountInfo[] = providerFiles.map((f, idx) => ({
       id: f.id,
-      email: f.email || f.name,
+      email: f.email || f.name || 'Unknown',
       isDefault: idx === 0,
       status: f.status,
     }));
@@ -138,13 +147,12 @@ function transformRemoteAuthFiles(files: RemoteAuthFile[]): RemoteAuthStatus[] {
       provider,
       displayName: PROVIDER_DISPLAY_NAMES[provider] || provider,
       authenticated: activeFiles.length > 0,
-      lastAuth: null,
       tokenFiles: providerFiles.length,
       accounts,
       defaultAccount: accounts.find((a) => a.isDefault)?.id || null,
       source: 'remote',
     });
-  });
+  }
 
   return result;
 }

@@ -42,10 +42,15 @@ export function getProxyTarget(): ProxyTarget {
   const config = loadCliproxyServerConfig();
 
   if (config?.remote?.enabled && config.remote?.host) {
+    const protocol = config.remote.protocol ?? 'http';
+    // Default port based on protocol if not specified
+    const defaultPort = protocol === 'https' ? 443 : 80;
+    const port = config.remote.port ?? defaultPort;
+
     return {
       host: config.remote.host,
-      port: config.remote.port ?? DEFAULT_CLIPROXY_PORT,
-      protocol: config.remote.protocol ?? 'http',
+      port,
+      protocol,
       authToken: config.remote.auth_token || undefined, // Empty string -> undefined
       isRemote: true,
     };
@@ -65,7 +70,9 @@ export function getProxyTarget(): ProxyTarget {
  * @param path Endpoint path (e.g., '/v0/management/usage')
  */
 export function buildProxyUrl(target: ProxyTarget, path: string): string {
-  return `${target.protocol}://${target.host}:${target.port}${path}`;
+  // Normalize path to ensure leading slash
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${target.protocol}://${target.host}:${target.port}${normalizedPath}`;
 }
 
 /**

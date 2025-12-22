@@ -1,3 +1,9 @@
+## [7.4.0](https://github.com/kaitranntt/ccs/compare/v7.3.0...v7.4.0) (2025-12-22)
+
+### Features
+
+* **api:** add Azure Foundry preset ([31bafaa](https://github.com/kaitranntt/ccs/commit/31bafaab8dbff03c984df3b2d0b0d743d71b012b))
+
 ## [7.3.0](https://github.com/kaitranntt/ccs/compare/v7.2.0...v7.3.0) (2025-12-22)
 
 ### Features

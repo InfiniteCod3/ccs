@@ -5,7 +5,8 @@
  * Requires usage-statistics-enabled: true in config.yaml.
  */
 
-import { CCS_CONTROL_PANEL_SECRET, CLIPROXY_DEFAULT_PORT } from './config-generator';
+import { CCS_CONTROL_PANEL_SECRET } from './config-generator';
+import { getProxyTarget, buildProxyUrl, buildProxyHeaders } from './proxy-target-resolver';
 
 /** Per-account usage statistics */
 export interface AccountUsageStats {
@@ -95,19 +96,27 @@ interface UsageApiResponse {
  * @param port CLIProxyAPI port (default: 8317)
  * @returns Stats object or null if unavailable
  */
-export async function fetchCliproxyStats(
-  port: number = CLIPROXY_DEFAULT_PORT
-): Promise<CliproxyStats | null> {
+export async function fetchCliproxyStats(port?: number): Promise<CliproxyStats | null> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
 
-    const response = await fetch(`http://127.0.0.1:${port}/v0/management/usage`, {
+    // Dynamic target resolution
+    const target = getProxyTarget();
+    // Allow port override for local testing only
+    if (port !== undefined && !target.isRemote) {
+      target.port = port;
+    }
+    const url = buildProxyUrl(target, '/v0/management/usage');
+
+    // For management endpoints, use CCS control panel secret for local, remote auth for remote
+    const headers = target.isRemote
+      ? buildProxyHeaders(target)
+      : { Accept: 'application/json', Authorization: `Bearer ${CCS_CONTROL_PANEL_SECRET}` };
+
+    const response = await fetch(url, {
       signal: controller.signal,
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${CCS_CONTROL_PANEL_SECRET}`,
-      },
+      headers,
     });
 
     clearTimeout(timeoutId);
@@ -222,20 +231,27 @@ export interface CliproxyModelsResponse {
  * @param port CLIProxyAPI port (default: 8317)
  * @returns Categorized models or null if unavailable
  */
-export async function fetchCliproxyModels(
-  port: number = CLIPROXY_DEFAULT_PORT
-): Promise<CliproxyModelsResponse | null> {
+export async function fetchCliproxyModels(port?: number): Promise<CliproxyModelsResponse | null> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-    const response = await fetch(`http://127.0.0.1:${port}/v1/models`, {
+    // Dynamic target resolution
+    const target = getProxyTarget();
+    // Allow port override for local testing only
+    if (port !== undefined && !target.isRemote) {
+      target.port = port;
+    }
+    const url = buildProxyUrl(target, '/v1/models');
+
+    // For /v1 endpoints: use remote auth token for remote, ccs-internal-managed for local
+    const headers = target.isRemote
+      ? buildProxyHeaders(target)
+      : { Accept: 'application/json', Authorization: 'Bearer ccs-internal-managed' };
+
+    const response = await fetch(url, {
       signal: controller.signal,
-      headers: {
-        Accept: 'application/json',
-        // Use the internal API key for /v1 endpoints
-        Authorization: 'Bearer ccs-internal-managed',
-      },
+      headers,
     });
 
     clearTimeout(timeoutId);
@@ -293,19 +309,27 @@ interface ErrorLogsApiResponse {
  * @param port CLIProxyAPI port (default: 8317)
  * @returns Array of error log metadata or null if unavailable
  */
-export async function fetchCliproxyErrorLogs(
-  port: number = CLIPROXY_DEFAULT_PORT
-): Promise<CliproxyErrorLog[] | null> {
+export async function fetchCliproxyErrorLogs(port?: number): Promise<CliproxyErrorLog[] | null> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-    const response = await fetch(`http://127.0.0.1:${port}/v0/management/request-error-logs`, {
+    // Dynamic target resolution
+    const target = getProxyTarget();
+    // Allow port override for local testing only
+    if (port !== undefined && !target.isRemote) {
+      target.port = port;
+    }
+    const url = buildProxyUrl(target, '/v0/management/request-error-logs');
+
+    // For management endpoints, use CCS control panel secret for local, remote auth for remote
+    const headers = target.isRemote
+      ? buildProxyHeaders(target)
+      : { Accept: 'application/json', Authorization: `Bearer ${CCS_CONTROL_PANEL_SECRET}` };
+
+    const response = await fetch(url, {
       signal: controller.signal,
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${CCS_CONTROL_PANEL_SECRET}`,
-      },
+      headers,
     });
 
     clearTimeout(timeoutId);
@@ -329,21 +353,32 @@ export async function fetchCliproxyErrorLogs(
  */
 export async function fetchCliproxyErrorLogContent(
   name: string,
-  port: number = CLIPROXY_DEFAULT_PORT
+  port?: number
 ): Promise<string | null> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    const response = await fetch(
-      `http://127.0.0.1:${port}/v0/management/request-error-logs/${encodeURIComponent(name)}`,
-      {
-        signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${CCS_CONTROL_PANEL_SECRET}`,
-        },
-      }
+    // Dynamic target resolution
+    const target = getProxyTarget();
+    // Allow port override for local testing only
+    if (port !== undefined && !target.isRemote) {
+      target.port = port;
+    }
+    const url = buildProxyUrl(
+      target,
+      `/v0/management/request-error-logs/${encodeURIComponent(name)}`
     );
+
+    // For management endpoints, use CCS control panel secret for local, remote auth for remote
+    const headers = target.isRemote
+      ? buildProxyHeaders(target)
+      : { Authorization: `Bearer ${CCS_CONTROL_PANEL_SECRET}` };
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers,
+    });
 
     clearTimeout(timeoutId);
 
@@ -362,13 +397,21 @@ export async function fetchCliproxyErrorLogContent(
  * @param port CLIProxyAPI port (default: 8317)
  * @returns true if proxy is running
  */
-export async function isCliproxyRunning(port: number = CLIPROXY_DEFAULT_PORT): Promise<boolean> {
+export async function isCliproxyRunning(port?: number): Promise<boolean> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 1000); // 1s timeout
 
-    // Use root endpoint - CLIProxyAPI returns server info at /
-    const response = await fetch(`http://127.0.0.1:${port}/`, {
+    // Dynamic target resolution
+    const target = getProxyTarget();
+    // Allow port override for local testing only
+    if (port !== undefined && !target.isRemote) {
+      target.port = port;
+    }
+    const url = buildProxyUrl(target, '/');
+
+    // Health check - no auth needed for root endpoint
+    const response = await fetch(url, {
       signal: controller.signal,
     });
 

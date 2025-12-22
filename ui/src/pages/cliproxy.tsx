@@ -192,6 +192,7 @@ export function CliproxyPage() {
   } | null>(null);
 
   const providers = useMemo(() => authData?.authStatus || [], [authData?.authStatus]);
+  const isRemoteMode = authData?.source === 'remote';
   const variants = useMemo(() => variantsData?.variants || [], [variantsData?.variants]);
 
   // Auto-select first provider if nothing selected
@@ -338,6 +339,7 @@ export function CliproxyPage() {
             authStatus={parentAuthForVariant}
             catalog={MODEL_CATALOGS[selectedVariantData.provider]}
             logoProvider={selectedVariantData.provider}
+            isRemoteMode={isRemoteMode}
             onAddAccount={() =>
               setAddAccountProvider({
                 provider: selectedVariantData.provider,
@@ -365,6 +367,7 @@ export function CliproxyPage() {
             displayName={selectedStatus.displayName}
             authStatus={selectedStatus}
             catalog={MODEL_CATALOGS[selectedStatus.provider]}
+            isRemoteMode={isRemoteMode}
             onAddAccount={() =>
               setAddAccountProvider({
                 provider: selectedStatus.provider,

@@ -392,6 +392,48 @@ function getGlobalEnvVars(): Record<string, string> {
   return globalEnvConfig.env;
 }
 
+/** Remote proxy configuration for URL rewriting */
+interface RemoteProxyRewriteConfig {
+  host: string;
+  port?: number;
+  protocol: 'http' | 'https';
+  authToken?: string;
+}
+
+/**
+ * Rewrite localhost URLs to remote server URLs.
+ * Handles various localhost patterns: 127.0.0.1, localhost, 0.0.0.0
+ */
+function rewriteLocalhostUrls(
+  envVars: NodeJS.ProcessEnv,
+  provider: CLIProxyProvider,
+  remoteConfig: RemoteProxyRewriteConfig
+): NodeJS.ProcessEnv {
+  const result = { ...envVars };
+  const baseUrl = result.ANTHROPIC_BASE_URL;
+
+  if (!baseUrl) return result;
+
+  // Check if URL points to localhost (127.0.0.1, localhost, 0.0.0.0)
+  const localhostPattern = /^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0)(:\d+)?/i;
+  if (!localhostPattern.test(baseUrl)) return result;
+
+  // Build remote URL with smart port handling
+  const defaultPort = remoteConfig.protocol === 'https' ? 443 : 80;
+  const effectivePort = remoteConfig.port ?? defaultPort;
+  const portSuffix = effectivePort === defaultPort ? '' : `:${effectivePort}`;
+  const remoteBaseUrl = `${remoteConfig.protocol}://${remoteConfig.host}${portSuffix}/api/provider/${provider}`;
+
+  result.ANTHROPIC_BASE_URL = remoteBaseUrl;
+
+  // Update auth token if provided
+  if (remoteConfig.authToken) {
+    result.ANTHROPIC_AUTH_TOKEN = remoteConfig.authToken;
+  }
+
+  return result;
+}
+
 /**
  * Get effective environment variables for provider
  *
@@ -402,14 +444,19 @@ function getGlobalEnvVars(): Record<string, string> {
  *
  * All results are merged with global_env vars (telemetry/reporting disables).
  * User takes full responsibility for custom settings.
+ *
+ * If remoteRewriteConfig is provided, localhost URLs are rewritten to remote server.
  */
 export function getEffectiveEnvVars(
   provider: CLIProxyProvider,
   port: number = CLIPROXY_DEFAULT_PORT,
-  customSettingsPath?: string
+  customSettingsPath?: string,
+  remoteRewriteConfig?: RemoteProxyRewriteConfig
 ): NodeJS.ProcessEnv {
   // Get global env vars (DISABLE_TELEMETRY, etc.)
   const globalEnv = getGlobalEnvVars();
+
+  let envVars: NodeJS.ProcessEnv;
 
   // Priority 1: Custom settings path (for user-defined variants)
   if (customSettingsPath) {
@@ -421,7 +468,12 @@ export function getEffectiveEnvVars(
 
         if (settings.env && typeof settings.env === 'object') {
           // Custom variant settings found - merge with global env
-          return { ...globalEnv, ...settings.env };
+          envVars = { ...globalEnv, ...settings.env };
+          // Apply remote rewrite if configured
+          if (remoteRewriteConfig) {
+            envVars = rewriteLocalhostUrls(envVars, provider, remoteRewriteConfig);
+          }
+          return envVars;
         }
       } catch {
         // Invalid JSON - fall through to provider defaults
@@ -443,7 +495,12 @@ export function getEffectiveEnvVars(
 
       if (settings.env && typeof settings.env === 'object') {
         // User override found - merge with global env
-        return { ...globalEnv, ...settings.env };
+        envVars = { ...globalEnv, ...settings.env };
+        // Apply remote rewrite if configured
+        if (remoteRewriteConfig) {
+          envVars = rewriteLocalhostUrls(envVars, provider, remoteRewriteConfig);
+        }
+        return envVars;
       }
     } catch {
       // Invalid JSON or structure - fall through to defaults
@@ -483,48 +540,89 @@ export function ensureProviderSettings(provider: CLIProxyProvider): void {
 /**
  * Get environment variables for remote proxy mode.
  * Uses the remote proxy's provider endpoint as the base URL.
+ * Respects user model settings from custom settings path or provider settings file.
  *
  * @param provider CLIProxy provider (gemini, codex, agy, qwen, iflow)
  * @param remoteConfig Remote proxy connection details
+ * @param customSettingsPath Optional path to user's custom settings file
  * @returns Environment variables for Claude CLI
  */
 export function getRemoteEnvVars(
   provider: CLIProxyProvider,
-  remoteConfig: { host: string; port?: number; protocol: 'http' | 'https'; authToken?: string }
+  remoteConfig: { host: string; port?: number; protocol: 'http' | 'https'; authToken?: string },
+  customSettingsPath?: string
 ): Record<string, string> {
   // Build URL with smart port handling - omit if using protocol default
   const defaultPort = remoteConfig.protocol === 'https' ? 443 : 80;
   const effectivePort = remoteConfig.port ?? defaultPort;
   const portSuffix = effectivePort === defaultPort ? '' : `:${effectivePort}`;
   const baseUrl = `${remoteConfig.protocol}://${remoteConfig.host}${portSuffix}/api/provider/${provider}`;
-  const models = getModelMapping(provider);
 
   // Get global env vars (DISABLE_TELEMETRY, etc.)
   const globalEnv = getGlobalEnvVars();
 
-  // Get additional env vars from base config (ANTHROPIC_MAX_TOKENS, etc.)
-  const baseEnvVars = getEnvVarsFromConfig(provider);
+  // Load user settings with priority: custom path > user settings file > base config
+  let userEnvVars: Record<string, string> = {};
 
-  // Filter out core env vars from base config to avoid conflicts
-  const {
-    ANTHROPIC_BASE_URL: _baseUrl,
-    ANTHROPIC_AUTH_TOKEN: _authToken,
-    ANTHROPIC_MODEL: _model,
-    ANTHROPIC_DEFAULT_OPUS_MODEL: _opusModel,
-    ANTHROPIC_DEFAULT_SONNET_MODEL: _sonnetModel,
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: _haikuModel,
-    ...additionalEnvVars
-  } = baseEnvVars;
+  // Priority 1: Custom settings path (for user-defined variants)
+  if (customSettingsPath) {
+    const expandedPath = customSettingsPath.replace(/^~/, require('os').homedir());
+    if (fs.existsSync(expandedPath)) {
+      try {
+        const content = fs.readFileSync(expandedPath, 'utf-8');
+        const settings: ProviderSettings = JSON.parse(content);
+        if (settings.env && typeof settings.env === 'object') {
+          userEnvVars = settings.env as Record<string, string>;
+        }
+      } catch {
+        // Invalid JSON - fall through to provider defaults
+        console.warn(warn(`Invalid settings file: ${customSettingsPath}`));
+      }
+    }
+  }
 
+  // Priority 2: Default provider settings file (~/.ccs/{provider}.settings.json)
+  if (Object.keys(userEnvVars).length === 0) {
+    const settingsPath = getProviderSettingsPath(provider);
+    if (fs.existsSync(settingsPath)) {
+      try {
+        const content = fs.readFileSync(settingsPath, 'utf-8');
+        const settings: ProviderSettings = JSON.parse(content);
+        if (settings.env && typeof settings.env === 'object') {
+          userEnvVars = settings.env as Record<string, string>;
+        }
+      } catch {
+        // Invalid JSON - fall through to base config
+      }
+    }
+  }
+
+  // Priority 3: Base config defaults
+  if (Object.keys(userEnvVars).length === 0) {
+    const models = getModelMapping(provider);
+    const baseEnvVars = getEnvVarsFromConfig(provider);
+    // Filter out URL/auth from base config (we'll set those from remote config)
+    const {
+      ANTHROPIC_BASE_URL: _baseUrl,
+      ANTHROPIC_AUTH_TOKEN: _authToken,
+      ...additionalEnvVars
+    } = baseEnvVars;
+    userEnvVars = {
+      ...additionalEnvVars,
+      ANTHROPIC_MODEL: models.claudeModel,
+      ANTHROPIC_DEFAULT_OPUS_MODEL: models.opusModel || models.claudeModel,
+      ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnetModel || models.claudeModel,
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haikuModel || models.claudeModel,
+    };
+  }
+
+  // Build final env: global + user settings + remote URL/auth override
   const env: Record<string, string> = {
     ...globalEnv,
-    ...additionalEnvVars,
+    ...userEnvVars,
+    // Always override URL and auth token with remote config
     ANTHROPIC_BASE_URL: baseUrl,
     ANTHROPIC_AUTH_TOKEN: remoteConfig.authToken || CCS_INTERNAL_API_KEY,
-    ANTHROPIC_MODEL: models.claudeModel,
-    ANTHROPIC_DEFAULT_OPUS_MODEL: models.opusModel || models.claudeModel,
-    ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnetModel || models.claudeModel,
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haikuModel || models.claudeModel,
   };
 
   return env;

@@ -51,6 +51,7 @@ import {
 import { registerSession, unregisterSession, cleanupOrphanedSessions } from './session-tracker';
 import { detectRunningProxy, waitForProxyHealthy, reclaimOrphanedProxy } from './proxy-detector';
 import { withStartupLock } from './startup-lock';
+import { loadOrCreateUnifiedConfig } from '../config/unified-config-loader';
 
 /** Default executor configuration */
 const DEFAULT_CONFIG: ExecutorConfig = {
@@ -126,7 +127,25 @@ export async function execClaudeWithCLIProxy(
 
   // 0. Resolve proxy configuration (CLI > ENV > config.yaml > defaults)
   // This filters proxy flags from args and returns resolved config
-  const { config: proxyConfig, remainingArgs: argsWithoutProxy } = resolveProxyConfig(args);
+  const unifiedConfig = loadOrCreateUnifiedConfig();
+  const cliproxyServerConfig = unifiedConfig.cliproxy_server;
+  const { config: proxyConfig, remainingArgs: argsWithoutProxy } = resolveProxyConfig(args, {
+    remote: cliproxyServerConfig?.remote
+      ? {
+          enabled: cliproxyServerConfig.remote.enabled,
+          host: cliproxyServerConfig.remote.host,
+          port: cliproxyServerConfig.remote.port,
+          protocol: cliproxyServerConfig.remote.protocol,
+          auth_token: cliproxyServerConfig.remote.auth_token,
+        }
+      : undefined,
+    local: cliproxyServerConfig?.local
+      ? {
+          port: cliproxyServerConfig.local.port,
+          auto_start: cliproxyServerConfig.local.auto_start,
+        }
+      : undefined,
+  });
 
   // Use resolved port from proxy config (overrides ExecutorConfig)
   if (proxyConfig.port !== CLIPROXY_DEFAULT_PORT) {
@@ -516,14 +535,29 @@ export async function execClaudeWithCLIProxy(
 
   // 7. Execute Claude CLI with proxied environment
   // Use remote or local env vars based on mode
+  // When remote is configured (even if using local), pass config for URL rewriting
+  const remoteRewriteConfig =
+    proxyConfig.mode === 'remote' && proxyConfig.host
+      ? {
+          host: proxyConfig.host,
+          port: proxyConfig.port,
+          protocol: proxyConfig.protocol,
+          authToken: proxyConfig.authToken,
+        }
+      : undefined;
+
   const envVars = useRemoteProxy
-    ? getRemoteEnvVars(provider, {
-        host: proxyConfig.host ?? 'localhost',
-        port: proxyConfig.port,
-        protocol: proxyConfig.protocol,
-        authToken: proxyConfig.authToken,
-      })
-    : getEffectiveEnvVars(provider, cfg.port, cfg.customSettingsPath);
+    ? getRemoteEnvVars(
+        provider,
+        {
+          host: proxyConfig.host ?? 'localhost',
+          port: proxyConfig.port,
+          protocol: proxyConfig.protocol,
+          authToken: proxyConfig.authToken,
+        },
+        cfg.customSettingsPath
+      )
+    : getEffectiveEnvVars(provider, cfg.port, cfg.customSettingsPath, remoteRewriteConfig);
   const webSearchEnv = getWebSearchHookEnv();
   const env = {
     ...process.env,

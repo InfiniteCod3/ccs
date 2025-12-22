@@ -31,6 +31,7 @@ export function ProviderEditor({
   authStatus,
   catalog,
   logoProvider,
+  isRemoteMode,
   onAddAccount,
   onSetDefault,
   onRemoveAccount,
@@ -124,6 +125,7 @@ export function ProviderEditor({
         hasChanges={hasChanges}
         isRawJsonValid={isRawJsonValid}
         isSaving={saveMutation.isPending}
+        isRemoteMode={isRemoteMode}
         onRefetch={refetch}
         onSave={() => saveMutation.mutate()}
       />

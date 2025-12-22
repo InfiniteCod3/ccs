@@ -249,7 +249,8 @@ export const api = {
   },
   cliproxy: {
     list: () => request<{ variants: Variant[] }>('/cliproxy'),
-    getAuthStatus: () => request<{ authStatus: AuthStatus[] }>('/cliproxy/auth'),
+    getAuthStatus: () =>
+      request<{ authStatus: AuthStatus[]; source?: 'remote' | 'local' }>('/cliproxy/auth'),
     create: (data: CreateVariant) =>
       request('/cliproxy', {
         method: 'POST',

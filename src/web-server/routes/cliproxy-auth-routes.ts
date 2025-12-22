@@ -21,6 +21,8 @@ import {
   removeAccount as removeAccountFn,
   touchAccount,
 } from '../../cliproxy/account-manager';
+import { getProxyTarget } from '../../cliproxy/proxy-target-resolver';
+import { fetchRemoteAuthStatus } from '../../cliproxy/remote-auth-fetcher';
 import type { CLIProxyProvider } from '../../cliproxy/types';
 
 const router = Router();
@@ -34,7 +36,15 @@ const validProviders: CLIProxyProvider[] = ['gemini', 'codex', 'agy', 'qwen', 'i
  */
 router.get('/', async (_req: Request, res: Response): Promise<void> => {
   try {
-    // Initialize accounts from existing tokens on first request
+    // Check if remote mode is enabled
+    const target = getProxyTarget();
+    if (target.isRemote) {
+      const authStatus = await fetchRemoteAuthStatus(target);
+      res.json({ authStatus, source: 'remote' });
+      return;
+    }
+
+    // Local mode: Initialize accounts from existing tokens on first request
     initializeAccounts();
 
     // Fetch CLIProxyAPI usage stats to determine active providers
@@ -85,7 +95,17 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
 
     res.json({ authStatus });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    // Return appropriate error for remote vs local mode
+    const target = getProxyTarget();
+    if (target.isRemote) {
+      res.status(503).json({
+        error: (error as Error).message,
+        authStatus: [],
+        source: 'remote',
+      });
+    } else {
+      res.status(500).json({ error: (error as Error).message });
+    }
   }
 });
 
@@ -94,16 +114,40 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
 /**
  * GET /api/cliproxy/accounts - Get all accounts across all providers
  */
-router.get('/accounts', (_req: Request, res: Response) => {
+router.get('/accounts', async (_req: Request, res: Response): Promise<void> => {
   try {
-    // Initialize accounts from existing tokens
+    // Check if remote mode is enabled
+    const target = getProxyTarget();
+    if (target.isRemote) {
+      const authStatus = await fetchRemoteAuthStatus(target);
+      // Transform RemoteAuthStatus[] to account summary format
+      const accounts = authStatus.flatMap((status) =>
+        status.accounts.map((acc) => ({
+          provider: status.provider,
+          ...acc,
+        }))
+      );
+      res.json({ accounts, source: 'remote' });
+      return;
+    }
+
+    // Local mode: Initialize accounts from existing tokens
     initializeAccounts();
 
     const accounts = getAllAccountsSummary();
     res.json({ accounts });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to list accounts';
-    res.status(500).json({ error: message });
+    const target = getProxyTarget();
+    if (target.isRemote) {
+      res.status(503).json({
+        error: (error as Error).message,
+        accounts: [],
+        source: 'remote',
+      });
+    } else {
+      const message = error instanceof Error ? error.message : 'Failed to list accounts';
+      res.status(500).json({ error: message });
+    }
   }
 });
 
@@ -132,6 +176,15 @@ router.get('/accounts/:provider', (req: Request, res: Response): void => {
  * POST /api/cliproxy/accounts/:provider/default - Set default account for provider
  */
 router.post('/accounts/:provider/default', (req: Request, res: Response): void => {
+  // Check if remote mode is enabled - account management not available
+  const target = getProxyTarget();
+  if (target.isRemote) {
+    res.status(501).json({
+      error: 'Account management not available in remote mode',
+    });
+    return;
+  }
+
   const { provider } = req.params;
   const { accountId } = req.body;
 
@@ -166,6 +219,15 @@ router.post('/accounts/:provider/default', (req: Request, res: Response): void =
  * DELETE /api/cliproxy/accounts/:provider/:accountId - Remove an account
  */
 router.delete('/accounts/:provider/:accountId', (req: Request, res: Response): void => {
+  // Check if remote mode is enabled - account management not available
+  const target = getProxyTarget();
+  if (target.isRemote) {
+    res.status(501).json({
+      error: 'Account management not available in remote mode',
+    });
+    return;
+  }
+
   const { provider, accountId } = req.params;
 
   // Validate provider

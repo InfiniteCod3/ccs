@@ -3,10 +3,14 @@
  *
  * Embeds the CLIProxy management.html with auto-authentication.
  * Uses postMessage to inject credentials into the iframe.
+ * Supports both local and remote CLIProxy server connections.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { RefreshCw, AlertCircle, Key, X, Gauge } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { RefreshCw, AlertCircle, Key, X, Gauge, Globe } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api-client';
+import type { CliproxyServerConfig } from '@/lib/api-client';
 
 /** CLIProxyAPI default port */
 const CLIPROXY_DEFAULT_PORT = 8317;
@@ -25,30 +29,94 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
   const [isConnected, setIsConnected] = useState(false);
   const [showLoginHint, setShowLoginHint] = useState(true);
 
-  const managementUrl = `http://localhost:${port}/management.html`;
+  // Fetch cliproxy_server config for remote/local mode detection
+  const { data: cliproxyConfig, error: configError } = useQuery<CliproxyServerConfig>({
+    queryKey: ['cliproxy-server-config'],
+    queryFn: () => api.cliproxyServer.get(),
+    staleTime: 30000, // 30 seconds
+  });
+
+  // Log config fetch errors (fallback to local mode on error)
+  useEffect(() => {
+    if (configError) {
+      console.warn('[ControlPanelEmbed] Config fetch failed, using local mode:', configError);
+    }
+  }, [configError]);
+
+  // Calculate URLs and settings based on remote or local mode
+  const { managementUrl, checkUrl, authToken, isRemote, displayHost } = useMemo(() => {
+    const remote = cliproxyConfig?.remote;
+
+    if (remote?.enabled && remote?.host) {
+      const protocol = remote.protocol || 'http';
+      // Use port from config, or default based on protocol (443 for https, 80 for http)
+      const remotePort = remote.port || (protocol === 'https' ? 443 : 80);
+      // Only include port in URL if it's non-standard
+      const portSuffix =
+        (protocol === 'https' && remotePort === 443) || (protocol === 'http' && remotePort === 80)
+          ? ''
+          : `:${remotePort}`;
+      const baseUrl = `${protocol}://${remote.host}${portSuffix}`;
+
+      return {
+        managementUrl: `${baseUrl}/management.html`,
+        checkUrl: `${baseUrl}/`,
+        authToken: remote.auth_token || undefined,
+        isRemote: true,
+        displayHost: `${remote.host}${portSuffix}`,
+      };
+    }
+
+    // Local mode
+    return {
+      managementUrl: `http://localhost:${port}/management.html`,
+      checkUrl: `http://localhost:${port}/`,
+      authToken: CCS_CONTROL_PANEL_SECRET,
+      isRemote: false,
+      displayHost: `localhost:${port}`,
+    };
+  }, [cliproxyConfig, port]);
 
   // Check if CLIProxy is running
   useEffect(() => {
+    const controller = new AbortController();
+
     const checkConnection = async () => {
       try {
-        const response = await fetch(`http://localhost:${port}/`, {
-          signal: AbortSignal.timeout(2000),
+        const response = await fetch(checkUrl, {
+          signal: controller.signal,
         });
         if (response.ok) {
           setIsConnected(true);
           setError(null);
         } else {
           setIsConnected(false);
-          setError('CLIProxy returned an error');
+          setError(
+            isRemote
+              ? `Remote CLIProxy at ${displayHost} returned an error`
+              : 'CLIProxy returned an error'
+          );
         }
-      } catch {
+      } catch (e) {
+        // Ignore abort errors (component unmounting)
+        if (e instanceof Error && e.name === 'AbortError') return;
+
         setIsConnected(false);
-        setError('CLIProxy is not running');
+        setError(
+          isRemote
+            ? `Remote CLIProxy at ${displayHost} is not reachable`
+            : 'CLIProxy is not running'
+        );
       }
     };
 
-    checkConnection();
-  }, [port]);
+    // Start connection check with timeout
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    checkConnection().finally(() => clearTimeout(timeoutId));
+
+    // Cleanup: abort fetch on unmount
+    return () => controller.abort();
+  }, [checkUrl, isRemote, displayHost]);
 
   // Handle iframe load - attempt to auto-login via postMessage
   const handleIframeLoad = useCallback(() => {
@@ -57,26 +125,38 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
     // Try to inject credentials via postMessage
     // The management.html needs to listen for this message
     // If it doesn't support it, user will see the login page
-    if (iframeRef.current?.contentWindow) {
+    if (iframeRef.current?.contentWindow && authToken) {
       try {
+        // Derive apiBase from checkUrl (remove trailing slash)
+        const apiBase = checkUrl.replace(/\/$/, '');
+
+        // Security: Validate iframe src matches target origin before sending credentials
+        const iframeSrc = iframeRef.current.src;
+        if (!iframeSrc.startsWith(apiBase)) {
+          console.warn('[ControlPanelEmbed] Iframe origin mismatch, skipping postMessage');
+          return;
+        }
+
         // Send credentials to iframe
         iframeRef.current.contentWindow.postMessage(
           {
             type: 'ccs-auto-login',
-            apiBase: `http://localhost:${port}`,
-            managementKey: CCS_CONTROL_PANEL_SECRET,
+            apiBase,
+            managementKey: authToken,
           },
-          `http://localhost:${port}`
+          apiBase
         );
-      } catch {
+      } catch (e) {
         // Cross-origin restriction - expected if not same origin
-        console.debug('[ControlPanelEmbed] postMessage failed - cross-origin');
+        console.debug('[ControlPanelEmbed] postMessage failed - cross-origin:', e);
       }
     }
-  }, [port]);
+  }, [checkUrl, authToken]);
 
   const handleRefresh = () => {
     setIsLoading(true);
+    setError(null);
+    setIsConnected(false);
     if (iframeRef.current) {
       iframeRef.current.src = managementUrl;
     }
@@ -119,15 +199,24 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
 
   return (
     <div className="flex-1 flex flex-col relative">
-      {/* Login hint banner */}
+      {/* Remote indicator and login hint banner */}
       {showLoginHint && !isLoading && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md text-sm">
+            {isRemote && (
+              <>
+                <Globe className="h-3.5 w-3.5 text-green-600" />
+                <span className="text-green-600 font-medium">Remote</span>
+                <span className="text-blue-300 dark:text-blue-700">|</span>
+              </>
+            )}
             <Key className="h-3.5 w-3.5 text-blue-600" />
             <span>
               Key:{' '}
               <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded font-mono font-semibold">
-                ccs
+                {authToken && authToken.length > 4
+                  ? `***${authToken.slice(-4)}`
+                  : authToken || 'ccs'}
               </code>
             </span>
             <button
@@ -145,7 +234,11 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
         <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
           <div className="text-center">
             <RefreshCw className="w-8 h-8 animate-spin text-primary mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">Loading Control Panel...</p>
+            <p className="text-sm text-muted-foreground">
+              {isRemote
+                ? `Loading Control Panel from ${displayHost}...`
+                : 'Loading Control Panel...'}
+            </p>
           </div>
         </div>
       )}

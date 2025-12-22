@@ -3,11 +3,24 @@
  *
  * Displays CLIProxy process status with start/stop/restart controls.
  * Shows: running state, port, session count, uptime, update availability.
+ * In remote mode: shows remote server info instead of local controls.
  */
 
-import { Activity, Power, RefreshCw, Clock, Users, Square, RotateCw, ArrowUp } from 'lucide-react';
+import {
+  Activity,
+  Power,
+  RefreshCw,
+  Clock,
+  Users,
+  Square,
+  RotateCw,
+  ArrowUp,
+  Globe,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useQuery } from '@tanstack/react-query';
+import { api, type CliproxyServerConfig } from '@/lib/api-client';
 import {
   useProxyStatus,
   useStartProxy,
@@ -48,9 +61,31 @@ export function ProxyStatusWidget() {
   const startProxy = useStartProxy();
   const stopProxy = useStopProxy();
 
+  // Fetch cliproxy_server config for remote mode detection
+  const { data: cliproxyConfig } = useQuery<CliproxyServerConfig>({
+    queryKey: ['cliproxy-server-config'],
+    queryFn: () => api.cliproxyServer.get(),
+    staleTime: 30000, // 30 seconds
+  });
+
+  // Determine if remote mode is enabled
+  const remoteConfig = cliproxyConfig?.remote;
+  const isRemoteMode = remoteConfig?.enabled && remoteConfig?.host;
+
   const isRunning = status?.running ?? false;
   const isActioning = startProxy.isPending || stopProxy.isPending;
   const hasUpdate = updateCheck?.hasUpdate ?? false;
+
+  // Build remote display info
+  const remoteDisplayHost = isRemoteMode
+    ? (() => {
+        const protocol = remoteConfig.protocol || 'http';
+        const port = remoteConfig.port || (protocol === 'https' ? 443 : 80);
+        const isDefaultPort =
+          (protocol === 'https' && port === 443) || (protocol === 'http' && port === 80);
+        return isDefaultPort ? remoteConfig.host : `${remoteConfig.host}:${port}`;
+      })()
+    : null;
 
   // Restart = stop then start
   const handleRestart = async () => {
@@ -59,6 +94,43 @@ export function ProxyStatusWidget() {
     await new Promise((r) => setTimeout(r, 500));
     startProxy.mutate();
   };
+
+  // Remote mode: show remote server info
+  if (isRemoteMode) {
+    return (
+      <div
+        className={cn(
+          'rounded-lg border p-3 transition-colors',
+          'border-blue-500/30 bg-blue-500/5'
+        )}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Globe className="w-4 h-4 text-blue-500" />
+            <span className="text-sm font-medium">Remote Proxy</span>
+            <Badge
+              variant="secondary"
+              className="text-[10px] h-4 px-1.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+            >
+              Active
+            </Badge>
+          </div>
+          <Activity className="w-3 h-3 text-blue-600" />
+        </div>
+
+        <div className="mt-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1 mb-1">
+            <span className="font-mono">{remoteDisplayHost}</span>
+          </div>
+          <p className="text-[10px] text-muted-foreground/70 leading-tight">
+            Traffic auto-routed to remote server
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Local mode: show original controls
 
   return (
     <div

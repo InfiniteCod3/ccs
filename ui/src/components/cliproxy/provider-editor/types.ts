@@ -21,6 +21,8 @@ export interface ProviderEditorProps {
   catalog?: ProviderCatalog;
   /** Provider type for logo display (defaults to provider) */
   logoProvider?: string;
+  /** True if using remote CLIProxy mode (hides local paths) */
+  isRemoteMode?: boolean;
   onAddAccount: () => void;
   onSetDefault: (accountId: string) => void;
   onRemoveAccount: (accountId: string) => void;

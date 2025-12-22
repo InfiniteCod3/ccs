@@ -196,9 +196,9 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
       },
     ],
   },
-  copilot: {
-    provider: 'copilot',
-    displayName: 'GitHub Copilot',
+  ghcp: {
+    provider: 'ghcp',
+    displayName: 'GitHub Copilot (OAuth)',
     defaultModel: 'claude-sonnet-4.5',
     models: [
       {

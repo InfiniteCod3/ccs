@@ -77,7 +77,10 @@ export class AgyProxy {
 
     try {
       // Read request body
-      const body = await this.readBody(req);
+      let body = await this.readBody(req);
+
+      // Transform request body to strip unsupported fields
+      const transformedBody = this.transformRequestBody(body);
 
       // Determine if streaming based on Accept header or request body
       const isStreaming =
@@ -91,16 +94,19 @@ export class AgyProxy {
       const isHttps = upstreamUrl.protocol === 'https:';
       const httpModule = isHttps ? https : http;
 
+      // Update content-length if body was transformed
+      const headers = { ...req.headers, host: upstreamUrl.host };
+      if (transformedBody !== body) {
+        headers['content-length'] = Buffer.byteLength(transformedBody).toString();
+      }
+
       const upstreamReq = httpModule.request(
         {
           hostname: upstreamUrl.hostname,
           port: upstreamUrl.port || (isHttps ? 443 : 80),
           path: upstreamUrl.pathname + upstreamUrl.search,
           method: req.method,
-          headers: {
-            ...req.headers,
-            host: upstreamUrl.host,
-          },
+          headers,
           // Allow self-signed certs for remote proxy (common in dev environments)
           ...(isHttps ? { rejectUnauthorized: false } : {}),
         },
@@ -130,8 +136,8 @@ export class AgyProxy {
         }
       });
 
-      if (body) {
-        upstreamReq.write(body);
+      if (transformedBody) {
+        upstreamReq.write(transformedBody);
       }
       upstreamReq.end();
     } catch (error) {
@@ -141,6 +147,43 @@ export class AgyProxy {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: { type: 'proxy_error', message: err.message } }));
       }
+    }
+  }
+
+  /**
+   * Transform request body to strip fields unsupported by Antigravity/Gemini.
+   * - Removes cache_control from thinking content blocks (causes 400 error)
+   */
+  private transformRequestBody(body: string): string {
+    if (!body) return body;
+
+    try {
+      const data = JSON.parse(body);
+
+      // Transform messages array if present
+      if (Array.isArray(data.messages)) {
+        let modified = false;
+        for (const message of data.messages) {
+          if (Array.isArray(message.content)) {
+            for (const block of message.content) {
+              // Strip cache_control from thinking blocks
+              if (block.type === 'thinking' && block.cache_control !== undefined) {
+                delete block.cache_control;
+                modified = true;
+              }
+            }
+          }
+        }
+        if (modified) {
+          this.log('Stripped cache_control from thinking blocks');
+          return JSON.stringify(data);
+        }
+      }
+
+      return body;
+    } catch {
+      // JSON parse failed, pass through unchanged
+      return body;
     }
   }
 

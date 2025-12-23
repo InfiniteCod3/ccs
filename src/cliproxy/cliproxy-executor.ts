@@ -581,8 +581,9 @@ export async function execClaudeWithCLIProxy(
     : getEffectiveEnvVars(provider, cfg.port, cfg.customSettingsPath, remoteRewriteConfig);
 
   // For 'agy' provider, override ANTHROPIC_BASE_URL to route through AgyProxy
+  // Path must match the upstream endpoint (/api/provider/agy) for correct routing
   if (agyProxyPort) {
-    envVars.ANTHROPIC_BASE_URL = `http://127.0.0.1:${agyProxyPort}/v1/messages`;
+    envVars.ANTHROPIC_BASE_URL = `http://127.0.0.1:${agyProxyPort}/api/provider/agy`;
     log(`Routing through AgyProxy: ANTHROPIC_BASE_URL=${envVars.ANTHROPIC_BASE_URL}`);
   }
 

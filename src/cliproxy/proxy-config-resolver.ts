@@ -215,9 +215,11 @@ export function resolveProxyConfig(
     ...DEFAULT_PROXY_CONFIG,
   };
 
-  // Determine mode: remote if host is specified anywhere (unless --local-proxy)
-  const hasRemoteHost =
-    cliFlags.host || envConfig.host || yamlConfig.remote?.host || yamlConfig.remote?.enabled;
+  // Determine mode: remote if explicitly enabled in config OR host specified via CLI/ENV
+  // CLI/ENV host takes precedence (user wants remote), but config.yaml requires enabled: true
+  const cliOrEnvRemote = cliFlags.host || envConfig.host;
+  const yamlRemoteEnabled = yamlConfig.remote?.enabled === true && yamlConfig.remote?.host;
+  const hasRemoteHost = cliOrEnvRemote || yamlRemoteEnabled;
 
   // --local-proxy forces local mode regardless of remote config
   if (cliFlags.localProxy) {

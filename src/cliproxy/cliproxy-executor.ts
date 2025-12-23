@@ -600,6 +600,7 @@ export async function execClaudeWithCLIProxy(
 
   log(`Claude env: ANTHROPIC_BASE_URL=${envVars.ANTHROPIC_BASE_URL}`);
   log(`Claude env: ANTHROPIC_MODEL=${envVars.ANTHROPIC_MODEL}`);
+  log(`Claude env: ANTHROPIC_AUTH_TOKEN=${envVars.ANTHROPIC_AUTH_TOKEN ? '[SET]' : '[NOT SET]'}`);
   if (Object.keys(webSearchEnv).length > 0) {
     log(`Claude env: WebSearch config=${JSON.stringify(webSearchEnv)}`);
   }

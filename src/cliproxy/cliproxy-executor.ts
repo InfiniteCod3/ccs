@@ -620,6 +620,8 @@ export async function execClaudeWithCLIProxy(
     '--accounts',
     '--use',
     '--nickname',
+    '--verbose',
+    '-v',
     // Proxy flags are handled by resolveProxyConfig, but list for documentation
     ...PROXY_CLI_FLAGS,
   ];

@@ -77,7 +77,7 @@ export class AgyProxy {
 
     try {
       // Read request body
-      let body = await this.readBody(req);
+      const body = await this.readBody(req);
 
       // Transform request body to strip unsupported fields
       const transformedBody = this.transformRequestBody(body);
@@ -153,6 +153,10 @@ export class AgyProxy {
   /**
    * Transform request body to strip fields unsupported by Antigravity/Gemini.
    * - Removes cache_control from thinking content blocks (causes 400 error)
+   *
+   * Handles multiple structures:
+   * 1. { type: "thinking", cache_control: {...} } - top-level cache_control
+   * 2. { thinking: { cache_control: {...} } } - nested thinking object
    */
   private transformRequestBody(body: string): string {
     if (!body) return body;
@@ -166,23 +170,32 @@ export class AgyProxy {
         for (const message of data.messages) {
           if (Array.isArray(message.content)) {
             for (const block of message.content) {
-              // Strip cache_control from thinking blocks
+              // Structure 1: { type: "thinking", cache_control: {...} }
               if (block.type === 'thinking' && block.cache_control !== undefined) {
                 delete block.cache_control;
                 modified = true;
+                this.log('Stripped cache_control from thinking block (type=thinking)');
+              }
+              // Structure 2: { thinking: { cache_control: {...} } }
+              if (block.thinking && typeof block.thinking === 'object') {
+                if (block.thinking.cache_control !== undefined) {
+                  delete block.thinking.cache_control;
+                  modified = true;
+                  this.log('Stripped cache_control from nested thinking object');
+                }
               }
             }
           }
         }
         if (modified) {
-          this.log('Stripped cache_control from thinking blocks');
           return JSON.stringify(data);
         }
       }
 
       return body;
-    } catch {
+    } catch (e) {
       // JSON parse failed, pass through unchanged
+      this.log(`Request body parse failed: ${(e as Error).message}`);
       return body;
     }
   }
@@ -306,9 +319,15 @@ export class AgyProxy {
     try {
       const data = JSON.parse(jsonStr);
 
+      // Log event type for debugging
+      if (data.type) {
+        this.log(`SSE event: ${data.type}`);
+      }
+
       // Transform model in message_start event
       if (data.type === 'message_start' && data.message?.model) {
         const originalModel = data.message.model;
+        this.log(`message_start model: ${originalModel}`);
         data.message.model = normalizeModelId(data.message.model);
         if (originalModel !== data.message.model) {
           this.log(`Normalized SSE model: ${originalModel} -> ${data.message.model}`);

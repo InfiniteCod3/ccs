@@ -1,3 +1,21 @@
+## [7.6.0](https://github.com/kaitranntt/ccs/compare/v7.5.1...v7.6.0) (2025-12-24)
+
+### Features
+
+* **cli:** add config command hints to help and error messages ([e981c39](https://github.com/kaitranntt/ccs/commit/e981c391a26d51de749099ca844915ffc06976e2))
+* **setup:** add first-time setup wizard for config initialization ([cec616d](https://github.com/kaitranntt/ccs/commit/cec616d530d9cf61a3a45032465b01e9a4037558)), closes [#142](https://github.com/kaitranntt/ccs/issues/142)
+
+### Bug Fixes
+
+* **cliproxy:** respect enabled:false and use protocol-based port defaults ([a99b6eb](https://github.com/kaitranntt/ccs/commit/a99b6eb93f06c6788bbf13a196bbca908fa06f4c))
+* **config:** improve edge case handling for config initialization ([ca78993](https://github.com/kaitranntt/ccs/commit/ca78993e7612143b3193e3cec3f8976be909e2d6))
+* **ghcp:** display device code during OAuth device code flow ([46f1699](https://github.com/kaitranntt/ccs/commit/46f1699b1c6f716d06c1eaa3dc6aac94dd5761ec)), closes [#189](https://github.com/kaitranntt/ccs/issues/189)
+
+### Code Refactoring
+
+* **config:** migrate to config.yaml as primary format ([b34469d](https://github.com/kaitranntt/ccs/commit/b34469d75fd2c2b7fd4f4cc4c0cc28885001649b)), closes [#142](https://github.com/kaitranntt/ccs/issues/142)
+* **ghcp:** remove unused device code session management ([5de6ccc](https://github.com/kaitranntt/ccs/commit/5de6cccee08aa06d6533181a1db189a595c5e123))
+
 ## [7.5.1](https://github.com/kaitranntt/ccs/compare/v7.5.0...v7.5.1) (2025-12-23)
 
 ### Bug Fixes

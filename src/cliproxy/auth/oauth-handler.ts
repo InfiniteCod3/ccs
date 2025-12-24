@@ -126,7 +126,7 @@ export async function triggerOAuth(
   options: OAuthOptions = {}
 ): Promise<AccountInfo | null> {
   const oauthConfig = getOAuthConfig(provider);
-  const { verbose = false, add = false, nickname, fromUI = false } = options;
+  const { verbose = false, add = false, nickname, fromUI = false, noIncognito = false } = options;
   const callbackPort = OAUTH_PORTS[provider];
   const isCLI = !fromUI;
   const headless = options.headless ?? isHeadlessEnvironment();
@@ -174,6 +174,10 @@ export async function triggerOAuth(
   const args = ['--config', configPath, oauthConfig.authFlag];
   if (headless) {
     args.push('--no-browser');
+  }
+  // Kiro-specific: --no-incognito to use normal browser (saves login credentials)
+  if (provider === 'kiro' && noIncognito) {
+    args.push('--no-incognito');
   }
 
   // Show step based on flow type

@@ -112,8 +112,8 @@ async function handleStdout(
     log(`Parsed ${state.parsedProjects.length} projects`);
   }
 
-  // Handle project selection prompt
-  if (!state.projectPromptHandled && isProjectSelectionPrompt(output)) {
+  // Handle project selection prompt (Authorization Code flows only - Device Code has no stdin pipe)
+  if (!isDeviceCodeFlow && !state.projectPromptHandled && isProjectSelectionPrompt(output)) {
     state.projectPromptHandled = true;
     await handleProjectSelection(output, state, options, authProcess, log);
   }
@@ -258,8 +258,13 @@ export function executeOAuthProcess(options: OAuthProcessOptions): Promise<Accou
   };
 
   return new Promise<AccountInfo | null>((resolve) => {
+    // Device Code flows (Qwen, GHCP) may need interactive stdin for email/prompts
+    // Authorization Code flows need piped stdin for project selection
+    const isDeviceCodeFlow = callbackPort === null;
+    const stdinMode = isDeviceCodeFlow ? 'inherit' : 'pipe';
+
     const authProcess = spawn(binaryPath, args, {
-      stdio: ['pipe', 'pipe', 'pipe'],
+      stdio: [stdinMode, 'pipe', 'pipe'],
       env: { ...process.env, CLI_PROXY_AUTH_DIR: tokenDir },
     });
 
@@ -291,7 +296,6 @@ export function executeOAuthProcess(options: OAuthProcessOptions): Promise<Accou
     });
 
     // Show waiting message after delay
-    const isDeviceCodeFlow = callbackPort === null;
     setTimeout(() => {
       if (isDeviceCodeFlow) {
         // Device Code Flow: show polling message

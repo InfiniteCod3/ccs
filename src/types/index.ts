@@ -12,6 +12,7 @@ export type {
   EnvValue,
   ProfileMetadata,
   ProfilesRegistry,
+  CLIProxyVariantsConfig,
 } from './config';
 export { isConfig, isSettings } from './config';
 

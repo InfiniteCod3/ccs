@@ -5,7 +5,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { loadConfig } from '../utils/config-manager';
+import { loadConfigSafe } from '../utils/config-manager';
 import { runHealthChecks } from './health-service';
 import { getAllAuthStatus, initializeAccounts } from '../cliproxy/auth-handler';
 import { getVersion } from '../utils/version';
@@ -18,7 +18,7 @@ export const overviewRoutes = Router();
  */
 overviewRoutes.get('/', async (_req: Request, res: Response) => {
   try {
-    const config = loadConfig();
+    const config = loadConfigSafe();
 
     const profileCount = Object.keys(config.profiles).length;
     const cliproxyVariantCount = Object.keys(config.cliproxy || {}).length;

@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { getCcsDir, getConfigPath, loadConfig } from '../../utils/config-manager';
+import { getCcsDir, getConfigPath, loadConfigSafe } from '../../utils/config-manager';
 import { expandPath } from '../../utils/helpers';
 import {
   loadOrCreateUnifiedConfig,
@@ -166,7 +166,7 @@ function removeApiProfileUnified(name: string): void {
 
 /** Remove API profile from legacy config */
 function removeApiProfileLegacy(name: string): void {
-  const config = loadConfig();
+  const config = loadConfigSafe();
   delete config.profiles[name];
 
   const configPath = getConfigPath();

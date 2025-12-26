@@ -4,7 +4,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCcsDir, getConfigPath, loadConfig, loadSettings } from '../../utils/config-manager';
+import { getCcsDir, getConfigPath, loadConfigSafe, loadSettings } from '../../utils/config-manager';
 import { expandPath } from '../../utils/helpers';
 import type { Config, Settings } from '../../types/config';
 
@@ -17,11 +17,12 @@ export interface ModelMapping {
 }
 
 /**
- * Read config safely with fallback
+ * Read config safely with fallback.
+ * Uses loadConfigSafe which supports both unified (config.yaml) and legacy (config.json).
  */
 export function readConfigSafe(): Config {
   try {
-    return loadConfig();
+    return loadConfigSafe();
   } catch {
     return { profiles: {} };
   }

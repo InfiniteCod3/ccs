@@ -5,7 +5,7 @@
  */
 
 import * as fs from 'fs';
-import { getConfigPath, loadConfig } from '../../utils/config-manager';
+import { getConfigPath, loadConfigSafe } from '../../utils/config-manager';
 import { CLIProxyProvider } from '../types';
 import {
   loadOrCreateUnifiedConfig,
@@ -38,7 +38,7 @@ export function variantExistsInConfig(name: string): boolean {
       const config = loadOrCreateUnifiedConfig();
       return !!(config.cliproxy?.variants && name in config.cliproxy.variants);
     }
-    const config = loadConfig();
+    const config = loadConfigSafe();
     return !!(config.cliproxy && name in config.cliproxy);
   } catch {
     return false;
@@ -94,7 +94,7 @@ export function listVariantsFromConfig(): Record<string, VariantConfig> {
       return result;
     }
 
-    const config = loadConfig();
+    const config = loadConfigSafe();
     const variants = config.cliproxy || {};
     const result: Record<string, VariantConfig> = {};
     for (const name of Object.keys(variants)) {

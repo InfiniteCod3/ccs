@@ -7,7 +7,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCcsDir, loadConfig } from '../../utils/config-manager';
+import { getCcsDir, loadConfigSafe } from '../../utils/config-manager';
 import { loadOrCreateUnifiedConfig, isUnifiedMode } from '../../config/unified-config-loader';
 import type { ApiProfileInfo, CliproxyVariantInfo, ApiListResult } from './profile-types';
 
@@ -20,7 +20,7 @@ export function apiProfileExists(name: string): boolean {
       const config = loadOrCreateUnifiedConfig();
       return name in config.profiles;
     }
-    const config = loadConfig();
+    const config = loadConfigSafe();
     return name in config.profiles;
   } catch {
     return false;
@@ -79,7 +79,7 @@ export function listApiProfiles(): ApiListResult {
       });
     }
   } else {
-    const config = loadConfig();
+    const config = loadConfigSafe();
     for (const [name, settingsPath] of Object.entries(config.profiles)) {
       // Skip 'default' profile - it's the user's native Claude settings
       if (name === 'default' && (settingsPath as string).includes('.claude/settings.json')) {
@@ -116,7 +116,7 @@ export function getApiProfileNames(): string[] {
     const config = loadOrCreateUnifiedConfig();
     return Object.keys(config.profiles);
   }
-  const config = loadConfig();
+  const config = loadConfigSafe();
   return Object.keys(config.profiles);
 }
 

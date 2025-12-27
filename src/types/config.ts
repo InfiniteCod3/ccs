@@ -17,10 +17,10 @@ export interface ProfilesConfig {
  * Example: "flash" → gemini provider with gemini-2.5-flash model
  */
 export interface CLIProxyVariantConfig {
-  /** CLIProxy provider to use (gemini, codex, agy, qwen) */
-  provider: 'gemini' | 'codex' | 'agy' | 'qwen';
-  /** Path to settings.json with custom model configuration */
-  settings: string;
+  /** CLIProxy provider to use */
+  provider: 'gemini' | 'codex' | 'agy' | 'qwen' | 'iflow' | 'kiro' | 'ghcp';
+  /** Path to settings.json with custom model configuration (optional) */
+  settings?: string;
   /** Account identifier for multi-account support (optional, defaults to 'default') */
   account?: string;
   /** Unique port for variant isolation (8318-8417) */

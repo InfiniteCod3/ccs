@@ -8,7 +8,7 @@ import {
   isCLIProxyInstalled,
   getCLIProxyPath,
   getAllAuthStatus,
-  getConfigPath,
+  getCliproxyConfigPath,
   getInstalledCliproxyVersion,
   CLIPROXY_DEFAULT_PORT,
   configNeedsRegeneration,
@@ -60,7 +60,7 @@ export class CLIProxyConfigChecker implements IHealthChecker {
 
   run(results: HealthCheck): void {
     const spinner = ora('Checking CLIProxy config').start();
-    const configPath = getConfigPath();
+    const configPath = getCliproxyConfigPath();
 
     if (fs.existsSync(configPath)) {
       // Check if config needs regeneration (version mismatch or missing features)

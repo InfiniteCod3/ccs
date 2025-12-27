@@ -129,9 +129,10 @@ export function getConfigPathForPort(port: number): string {
 }
 
 /**
- * Get config file path (default port)
+ * Get CLIProxy config file path (default port)
+ * Named distinctly from config-manager's getConfigPath to avoid confusion.
  */
-export function getConfigPath(): string {
+export function getCliproxyConfigPath(): string {
   return getConfigPathForPort(CLIPROXY_DEFAULT_PORT);
 }
 
@@ -377,7 +378,7 @@ export function regenerateConfig(port: number = CLIPROXY_DEFAULT_PORT): string {
  * @returns true if config should be regenerated
  */
 export function configNeedsRegeneration(): boolean {
-  const configPath = getConfigPath();
+  const configPath = getCliproxyConfigPath();
   if (!fs.existsSync(configPath)) {
     return false; // Will be created on first use
   }

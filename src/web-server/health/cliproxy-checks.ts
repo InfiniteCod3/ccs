@@ -9,7 +9,7 @@ import {
   isCLIProxyInstalled,
   getInstalledCliproxyVersion,
   getCLIProxyPath,
-  getConfigPath as getCliproxyConfigPath,
+  getCliproxyConfigPath,
   getAllAuthStatus,
   CLIPROXY_DEFAULT_PORT,
 } from '../../cliproxy';

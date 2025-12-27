@@ -7,7 +7,7 @@
 
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
-import { getConfigPath } from './config-generator';
+import { getCliproxyConfigPath } from './config-generator';
 
 /** Model alias configuration */
 export interface OpenAICompatModel {
@@ -48,7 +48,7 @@ interface ConfigYaml {
  * Load current config.yaml
  */
 function loadConfig(): ConfigYaml {
-  const configPath = getConfigPath();
+  const configPath = getCliproxyConfigPath();
   if (!fs.existsSync(configPath)) {
     return {};
   }
@@ -65,7 +65,7 @@ function loadConfig(): ConfigYaml {
  * Save config.yaml with proper formatting
  */
 function saveConfig(config: ConfigYaml): void {
-  const configPath = getConfigPath();
+  const configPath = getCliproxyConfigPath();
   const content = yaml.dump(config, {
     lineWidth: -1, // Disable line wrapping
     quotingType: '"',

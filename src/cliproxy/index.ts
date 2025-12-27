@@ -65,7 +65,7 @@ export {
   getCliproxyDir,
   getProviderAuthDir,
   getAuthDir,
-  getConfigPath,
+  getCliproxyConfigPath,
   getBinDir,
   configExists,
   deleteConfig,

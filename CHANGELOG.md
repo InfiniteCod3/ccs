@@ -1,3 +1,9 @@
+## [7.11.1](https://github.com/kaitranntt/ccs/compare/v7.11.0...v7.11.1) (2025-12-29)
+
+### Bug Fixes
+
+* validate required config fields before save ([#225](https://github.com/kaitranntt/ccs/issues/225)) ([388428b](https://github.com/kaitranntt/ccs/commit/388428bba935393f7619b9c682cf43c3dfb966af)), closes [#224](https://github.com/kaitranntt/ccs/issues/224) [#224](https://github.com/kaitranntt/ccs/issues/224)
+
 ## [7.11.0](https://github.com/kaitranntt/ccs/compare/v7.10.0...v7.11.0) (2025-12-29)
 
 ### Features

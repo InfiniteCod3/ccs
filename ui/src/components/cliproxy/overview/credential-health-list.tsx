@@ -6,8 +6,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, AlertCircle, XCircle, MinusCircle, RefreshCw } from 'lucide-react';
+import { CheckCircle2, AlertCircle, XCircle, MinusCircle, RefreshCw, Clock } from 'lucide-react';
 import { useCliproxyAuth } from '@/hooks/use-cliproxy';
+import { useCliproxyStats } from '@/hooks/use-cliproxy-stats';
 import { cn } from '@/lib/utils';
 import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 
@@ -19,7 +20,7 @@ interface CredentialRowProps {
   status: CredentialStatus;
   statusMessage: string;
   email?: string;
-  expiresAt?: string;
+  lastUsedAt?: string;
   onRefresh?: () => void;
   privacyMode?: boolean;
 }
@@ -30,7 +31,7 @@ function CredentialRow({
   status,
   statusMessage,
   email,
-  expiresAt,
+  lastUsedAt,
   onRefresh,
   privacyMode,
 }: CredentialRowProps) {
@@ -60,16 +61,23 @@ function CredentialRow({
   const config = statusConfig[status];
   const Icon = config.icon;
 
-  const formatExpiry = (date?: string) => {
-    if (!date) return 'Never';
-    const expiry = new Date(date);
-    const now = new Date();
-    const diff = expiry.getTime() - now.getTime();
-    if (diff < 0) return 'Expired';
-    const hours = Math.floor(diff / 3600000);
-    if (hours < 1) return 'Soon';
-    if (hours < 24) return `${hours}h`;
-    return `${Math.floor(hours / 24)}d`;
+  const formatLastUsed = (date?: string) => {
+    if (!date) return 'Never used';
+    try {
+      const lastUsed = new Date(date);
+      const now = new Date();
+      const diff = now.getTime() - lastUsed.getTime();
+      if (diff < 0) return 'Just now';
+      const minutes = Math.floor(diff / 60000);
+      const hours = Math.floor(diff / 3600000);
+      const days = Math.floor(diff / 86400000);
+      if (days > 0) return `${days}d ago`;
+      if (hours > 0) return `${hours}h ago`;
+      if (minutes > 0) return `${minutes}m ago`;
+      return 'Just now';
+    } catch {
+      return 'Unknown';
+    }
   };
 
   return (
@@ -96,8 +104,9 @@ function CredentialRow({
           >
             {statusMessage}
           </Badge>
-          <div className="text-xs text-muted-foreground mt-0.5">
-            Expires: {formatExpiry(expiresAt)}
+          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5 justify-end">
+            <Clock className="w-3 h-3" />
+            {formatLastUsed(lastUsedAt)}
           </div>
         </div>
         {status === 'warning' && onRefresh && (
@@ -129,23 +138,28 @@ function CredentialHealthSkeleton() {
 
 export function CredentialHealthList() {
   const { data: authData, isLoading } = useCliproxyAuth();
+  const { data: stats } = useCliproxyStats(true);
   const { privacyMode } = usePrivacy();
 
   if (isLoading) {
     return <CredentialHealthSkeleton />;
   }
 
-  // Flatten accounts from all providers
+  // Flatten accounts from all providers with runtime lastUsedAt
   const credentials =
     authData?.authStatus.flatMap((status) =>
-      (status.accounts ?? []).map((account) => ({
-        name: account.id,
-        provider: status.provider,
-        status: (account as { status?: CredentialStatus }).status ?? 'ready',
-        statusMessage: (account as { statusMessage?: string }).statusMessage ?? 'Ready',
-        email: account.email,
-        expiresAt: (account as { expiresAt?: string }).expiresAt,
-      }))
+      (status.accounts ?? []).map((account) => {
+        const accountKey = account.email || account.id;
+        const runtimeLastUsed = stats?.accountStats?.[accountKey]?.lastUsedAt;
+        return {
+          name: account.id,
+          provider: status.provider,
+          status: (account as { status?: CredentialStatus }).status ?? 'ready',
+          statusMessage: (account as { statusMessage?: string }).statusMessage ?? 'Ready',
+          email: account.email,
+          lastUsedAt: runtimeLastUsed || account.lastUsedAt,
+        };
+      })
     ) ?? [];
 
   if (credentials.length === 0) {

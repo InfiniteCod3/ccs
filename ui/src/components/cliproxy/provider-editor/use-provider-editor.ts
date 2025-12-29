@@ -8,6 +8,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type { SettingsResponse, UseProviderEditorReturn } from './types';
 
+/** Required env vars for CLIProxy providers to function */
+const REQUIRED_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const;
+
+/** Validate settings have required fields */
+function validateSettings(settings: { env?: Record<string, string> }): {
+  valid: boolean;
+  missing: string[];
+} {
+  const env = settings?.env || {};
+  const missing = REQUIRED_ENV_KEYS.filter((key) => !env[key]?.trim());
+  return { valid: missing.length === 0, missing };
+}
+
 export function useProviderEditor(provider: string): UseProviderEditorReturn {
   const [rawJsonEdits, setRawJsonEdits] = useState<string | null>(null);
   const [conflictDialog, setConflictDialog] = useState(false);
@@ -95,10 +108,20 @@ export function useProviderEditor(provider: string): UseProviderEditorReturn {
     return rawJsonEdits !== JSON.stringify(settings, null, 2);
   }, [rawJsonEdits, settings]);
 
-  // Save mutation
+  // Validation state for missing required fields
+  const validationResult = useMemo(() => validateSettings(currentSettings), [currentSettings]);
+
+  // Save mutation with validation
   const saveMutation = useMutation({
     mutationFn: async () => {
       const settingsToSave = JSON.parse(rawJsonContent);
+
+      // Validate required fields before saving
+      const validation = validateSettings(settingsToSave);
+      if (!validation.valid) {
+        throw new Error(`MISSING_REQUIRED:${validation.missing.join(',')}`);
+      }
+
       const res = await fetch(`/api/settings/${provider}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -120,6 +143,12 @@ export function useProviderEditor(provider: string): UseProviderEditorReturn {
     onError: (error: Error) => {
       if (error.message === 'CONFLICT') {
         setConflictDialog(true);
+      } else if (error.message.startsWith('MISSING_REQUIRED:')) {
+        const missing = error.message.replace('MISSING_REQUIRED:', '').split(',');
+        toast.error(`Missing required fields: ${missing.join(', ')}`, {
+          description: 'Apply a preset or add these fields manually.',
+          duration: 6000,
+        });
       } else {
         toast.error(error.message);
       }
@@ -159,5 +188,7 @@ export function useProviderEditor(provider: string): UseProviderEditorReturn {
     conflictDialog,
     setConflictDialog,
     handleConflictResolve,
+    // Validation
+    missingRequiredFields: validationResult.missing,
   };
 }

@@ -111,6 +111,10 @@ export {
 export type { CliproxyStats } from './stats-fetcher';
 export { fetchCliproxyStats, isCliproxyRunning } from './stats-fetcher';
 
+// Quota fetcher
+export type { ModelQuota, QuotaResult } from './quota-fetcher';
+export { fetchAccountQuota } from './quota-fetcher';
+
 // OpenAI compatibility layer
 export type { OpenAICompatProvider, OpenAICompatModel } from './openai-compat-manager';
 export {

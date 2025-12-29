@@ -177,6 +177,7 @@ export function ProviderEditor({
                     onRemoveAccount={onRemoveAccount}
                     isRemovingAccount={isRemovingAccount}
                     privacyMode={privacyMode}
+                    provider={provider}
                   />
                 </TabsContent>
                 <TabsContent

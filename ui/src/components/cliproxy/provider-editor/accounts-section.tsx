@@ -16,6 +16,8 @@ interface AccountsSectionProps {
   onRemoveAccount: (accountId: string) => void;
   isRemovingAccount?: boolean;
   privacyMode?: boolean;
+  /** Show quota bars for accounts (only applicable for 'agy' provider) */
+  showQuota?: boolean;
 }
 
 export function AccountsSection({
@@ -25,6 +27,7 @@ export function AccountsSection({
   onRemoveAccount,
   isRemovingAccount,
   privacyMode,
+  showQuota,
 }: AccountsSectionProps) {
   return (
     <div>
@@ -54,6 +57,7 @@ export function AccountsSection({
               onRemove={() => onRemoveAccount(account.id)}
               isRemoving={isRemovingAccount}
               privacyMode={privacyMode}
+              showQuota={showQuota}
             />
           ))}
         </div>

@@ -107,6 +107,32 @@ export interface CliproxyModelsResponse {
   totalCount: number;
 }
 
+/** Individual model quota info from Google Cloud Code API */
+export interface ModelQuota {
+  /** Model name, e.g., "gemini-3-pro-high" */
+  name: string;
+  /** Display name from API, e.g., "Gemini 3 Pro" */
+  displayName?: string;
+  /** Remaining quota as percentage (0-100) */
+  percentage: number;
+  /** ISO timestamp when quota resets, null if unknown */
+  resetTime: string | null;
+}
+
+/** Quota fetch result */
+export interface QuotaResult {
+  /** Whether fetch succeeded */
+  success: boolean;
+  /** Quota for each available model */
+  models: ModelQuota[];
+  /** Timestamp of fetch */
+  lastUpdated: number;
+  /** True if account lacks quota access (403) */
+  isForbidden?: boolean;
+  /** Error message if fetch failed */
+  error?: string;
+}
+
 /** Provider accounts summary */
 export type ProviderAccountsMap = Record<string, OAuthAccount[]>;
 
@@ -403,5 +429,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(params),
       }),
+  },
+  /** Account quota API */
+  quota: {
+    /** Fetch quota for a specific account */
+    get: (provider: string, accountId: string) =>
+      request<QuotaResult>(`/cliproxy/quota/${provider}/${encodeURIComponent(accountId)}`),
   },
 };

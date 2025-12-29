@@ -3,6 +3,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
+import type { ModelQuota, QuotaResult } from '@/lib/api-client';
 
 /** Per-account usage statistics */
 export interface AccountUsageStats {
@@ -187,5 +188,35 @@ export function useCliproxyErrorLogContent(name: string | null) {
     queryFn: () => (name ? fetchCliproxyErrorLogContent(name) : Promise.resolve('')),
     enabled: !!name,
     staleTime: 60000, // Cache log content for 1 minute
+  });
+}
+
+// Re-export for consumers
+export type { ModelQuota, QuotaResult };
+
+/**
+ * Fetch account quota from API
+ */
+async function fetchAccountQuota(provider: string, accountId: string): Promise<QuotaResult> {
+  const response = await fetch(`/api/cliproxy/quota/${provider}/${encodeURIComponent(accountId)}`);
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to fetch quota');
+  }
+  return response.json();
+}
+
+/**
+ * Hook to get account quota
+ * Only enabled for 'agy' provider (Antigravity) as it's the only one supporting quota
+ */
+export function useAccountQuota(provider: string, accountId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['account-quota', provider, accountId],
+    queryFn: () => fetchAccountQuota(provider, accountId),
+    enabled: enabled && provider === 'agy' && !!accountId,
+    staleTime: 60000, // Cache for 1 minute
+    refetchInterval: 300000, // Refresh every 5 minutes
+    retry: 1,
   });
 }

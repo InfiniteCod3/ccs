@@ -35,6 +35,8 @@ interface ModelConfigTabProps {
   onRemoveAccount: (accountId: string) => void;
   isRemovingAccount?: boolean;
   privacyMode?: boolean;
+  /** Provider name for quota display */
+  provider?: string;
 }
 
 export function ModelConfigTab({
@@ -56,6 +58,7 @@ export function ModelConfigTab({
   onRemoveAccount,
   isRemovingAccount,
   privacyMode,
+  provider,
 }: ModelConfigTabProps) {
   return (
     <ScrollArea className="flex-1">
@@ -82,6 +85,7 @@ export function ModelConfigTab({
           onRemoveAccount={onRemoveAccount}
           isRemovingAccount={isRemovingAccount}
           privacyMode={privacyMode}
+          showQuota={provider === 'agy'}
         />
       </div>
     </ScrollArea>

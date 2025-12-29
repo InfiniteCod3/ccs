@@ -12,6 +12,8 @@ import {
   fetchCliproxyErrorLogs,
   fetchCliproxyErrorLogContent,
 } from '../../cliproxy/stats-fetcher';
+import { fetchAccountQuota } from '../../cliproxy/quota-fetcher';
+import type { CLIProxyProvider } from '../../cliproxy/types';
 import {
   getCliproxyWritablePath,
   getConfigPath,
@@ -425,6 +427,52 @@ router.put('/models/:provider', async (req: Request, res: Response): Promise<voi
     fs.renameSync(tempPath, settingsPath);
 
     res.json({ success: true, provider, model });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// ==================== Account Quota ====================
+
+/**
+ * GET /api/cliproxy/quota/:provider/:accountId - Get quota for a specific account
+ * Returns: QuotaResult with model quotas and reset times
+ */
+router.get('/quota/:provider/:accountId', async (req: Request, res: Response): Promise<void> => {
+  const { provider, accountId } = req.params;
+
+  // Validate provider
+  const validProviders: CLIProxyProvider[] = [
+    'agy',
+    'gemini',
+    'codex',
+    'qwen',
+    'iflow',
+    'kiro',
+    'ghcp',
+  ];
+  if (!validProviders.includes(provider as CLIProxyProvider)) {
+    res.status(400).json({
+      error: 'Invalid provider',
+      message: `Provider must be one of: ${validProviders.join(', ')}`,
+    });
+    return;
+  }
+
+  // Validate accountId - prevent path traversal
+  if (
+    !accountId ||
+    accountId.includes('..') ||
+    accountId.includes('/') ||
+    accountId.includes('\\')
+  ) {
+    res.status(400).json({ error: 'Invalid account ID' });
+    return;
+  }
+
+  try {
+    const result = await fetchAccountQuota(provider as CLIProxyProvider, accountId);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

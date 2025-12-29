@@ -24,6 +24,17 @@ interface ProviderSettings {
 }
 
 /**
+ * Validate port is a valid positive integer (1-65535).
+ * Returns default port if invalid.
+ */
+function validatePort(port: number): number {
+  if (!Number.isFinite(port) || port < 1 || port > 65535 || !Number.isInteger(port)) {
+    return CLIPROXY_DEFAULT_PORT;
+  }
+  return port;
+}
+
+/**
  * Ensure required CLIProxy env vars are present.
  * Falls back to bundled defaults if missing from user settings.
  * This prevents 404 errors when users forget to set BASE_URL/AUTH_TOKEN.
@@ -33,8 +44,9 @@ function ensureRequiredEnvVars(
   provider: CLIProxyProvider,
   port: number
 ): NodeJS.ProcessEnv {
+  const validPort = validatePort(port);
   const result = { ...envVars };
-  const defaults = getClaudeEnvVars(provider, port);
+  const defaults = getClaudeEnvVars(provider, validPort);
 
   // Fill in missing required vars from defaults
   if (!result.ANTHROPIC_BASE_URL?.trim()) {

@@ -26,6 +26,48 @@ import { checkCliproxyUpdate } from '../../cliproxy/binary-manager';
 const router = Router();
 
 /**
+ * Extract status code and model from error log file (lightweight parsing)
+ * Reads first 4KB for model, last 2KB for status code
+ */
+async function extractErrorLogMetadata(
+  filePath: string
+): Promise<{ statusCode?: number; model?: string }> {
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const stat = fs.fstatSync(fd);
+    const fileSize = stat.size;
+
+    // Read first 4KB for model (in request body)
+    const startBuffer = Buffer.alloc(Math.min(4096, fileSize));
+    fs.readSync(fd, startBuffer, 0, startBuffer.length, 0);
+    const startContent = startBuffer.toString('utf-8');
+
+    // Extract model from request body JSON: "model":"gemini-3-flash-preview"
+    const modelMatch = startContent.match(/"model"\s*:\s*"([^"]+)"/);
+    const model = modelMatch ? modelMatch[1] : undefined;
+
+    // Read last 2KB for status code (in response section at end)
+    let statusCode: number | undefined;
+    if (fileSize > 2048) {
+      const endBuffer = Buffer.alloc(2048);
+      fs.readSync(fd, endBuffer, 0, 2048, fileSize - 2048);
+      const endContent = endBuffer.toString('utf-8');
+      const statusMatch = endContent.match(/Status:\s*(\d{3})/);
+      statusCode = statusMatch ? parseInt(statusMatch[1], 10) : undefined;
+    } else {
+      // Small file - check start content for status
+      const statusMatch = startContent.match(/Status:\s*(\d{3})/);
+      statusCode = statusMatch ? parseInt(statusMatch[1], 10) : undefined;
+    }
+
+    fs.closeSync(fd);
+    return { statusCode, model };
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Shared handler for stats/usage endpoint
  */
 const handleStatsRequest = async (_req: Request, res: Response): Promise<void> => {
@@ -214,14 +256,22 @@ router.get('/error-logs', async (_req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    // Inject absolute paths into each file entry
+    // Inject absolute paths and extract metadata from each file
     const logsDir = path.join(getCliproxyWritablePath(), 'logs');
-    const filesWithPaths = files.map((file) => ({
-      ...file,
-      absolutePath: path.join(logsDir, file.name),
-    }));
+    const filesWithMetadata = await Promise.all(
+      files.map(async (file) => {
+        const absolutePath = path.join(logsDir, file.name);
+        const metadata = await extractErrorLogMetadata(absolutePath);
+        return {
+          ...file,
+          absolutePath,
+          statusCode: metadata.statusCode,
+          model: metadata.model,
+        };
+      })
+    );
 
-    res.json({ files: filesWithPaths });
+    res.json({ files: filesWithMetadata });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

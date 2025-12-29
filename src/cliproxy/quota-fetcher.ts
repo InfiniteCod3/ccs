@@ -54,11 +54,19 @@ const ANTIGRAVITY_CLIENT_ID =
   '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
 const ANTIGRAVITY_CLIENT_SECRET = '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';
 
-/** API client headers */
-const ANTIGRAVITY_HEADERS = {
+/** Headers for loadCodeAssist (matches CLIProxyAPI antigravity.go) */
+const LOADCODEASSIST_HEADERS = {
   'Content-Type': 'application/json',
-  'User-Agent': 'antigravity/1.11.5 linux/amd64',
-  'X-Goog-Api-Client': 'gl-node/20.9.0',
+  'User-Agent': 'google-api-nodejs-client/9.15.1',
+  'X-Goog-Api-Client': 'google-cloud-sdk vscode_cloudshelleditor/0.1',
+  'Client-Metadata':
+    '{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}',
+};
+
+/** Headers for fetchAvailableModels (matches CLIProxyAPI antigravity_executor.go) */
+const FETCHMODELS_HEADERS = {
+  'Content-Type': 'application/json',
+  'User-Agent': 'antigravity/1.104.0 darwin/arm64',
 };
 
 /** Auth file structure */
@@ -270,7 +278,7 @@ async function getProjectId(
       method: 'POST',
       signal: controller.signal,
       headers: {
-        ...ANTIGRAVITY_HEADERS,
+        ...LOADCODEASSIST_HEADERS,
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
@@ -326,24 +334,25 @@ async function getProjectId(
 
 /**
  * Fetch available models with quota info
+ * Note: projectId is kept for potential future use but not sent in body
+ * (CLIProxyAPI sends empty {} body for this endpoint)
  */
-async function fetchAvailableModels(accessToken: string, projectId: string): Promise<QuotaResult> {
+async function fetchAvailableModels(accessToken: string, _projectId: string): Promise<QuotaResult> {
   const url = `${ANTIGRAVITY_API_BASE}/${ANTIGRAVITY_API_VERSION}:fetchAvailableModels`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);
 
   try {
+    // Match CLIProxyAPI exactly: empty body, minimal headers
     const response = await fetch(url, {
       method: 'POST',
       signal: controller.signal,
       headers: {
-        ...ANTIGRAVITY_HEADERS,
+        ...FETCHMODELS_HEADERS,
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({
-        project: projectId,
-      }),
+      body: JSON.stringify({}),
     });
 
     clearTimeout(timeoutId);

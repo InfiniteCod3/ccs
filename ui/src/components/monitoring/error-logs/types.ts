@@ -10,6 +10,10 @@ export interface ErrorLogItemProps {
   modified: number;
   isSelected: boolean;
   onClick: () => void;
+  /** HTTP status code from pre-parsed metadata */
+  statusCode?: number;
+  /** Model name from pre-parsed metadata */
+  model?: string;
 }
 
 export interface LogContentPanelProps {

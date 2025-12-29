@@ -297,6 +297,10 @@ export interface CliproxyErrorLog {
   modified: number;
   /** Absolute path to the log file (injected by backend) */
   absolutePath?: string;
+  /** HTTP status code extracted from log (injected by backend) */
+  statusCode?: number;
+  /** Model name extracted from request body (injected by backend) */
+  model?: string;
 }
 
 /** Response from /v0/management/request-error-logs endpoint */

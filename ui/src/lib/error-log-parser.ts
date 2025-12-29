@@ -62,9 +62,10 @@ export function parseFilename(name: string): ParsedFilename {
     result.provider = providerMatch[1];
   }
 
-  // Extract endpoint from after provider: ...-api-{ENDPOINT}-{timestamp}
-  // Example: error-api-provider-agy-api-event_logging-batch-2025-12-18T185041-...
-  const endpointMatch = name.match(/-api-([a-z_]+(?:-[a-z_]+)*)-\d{4}-\d{2}-\d{2}T/i);
+  // Extract endpoint: after provider, before timestamp
+  // Format: error-api-provider-{provider}-{endpoint}-{timestamp}-{id}.log
+  // Example: error-api-provider-agy-v1-messages-2025-12-29T105823-a12b73f8.log
+  const endpointMatch = name.match(/error-api-provider-[^-]+-(.+?)-\d{4}-\d{2}-\d{2}T/);
   if (endpointMatch) {
     result.endpoint = endpointMatch[1].replace(/-/g, '/');
   }
@@ -121,6 +122,10 @@ export function parseErrorLog(content: string): ParsedErrorLog {
       continue;
     } else if (part === 'REQUEST BODY') {
       currentSection = 'request_body';
+      continue;
+    } else if (part === 'API RESPONSE') {
+      // Skip API RESPONSE section - we parse the actual RESPONSE section instead
+      currentSection = '';
       continue;
     } else if (part === 'RESPONSE') {
       currentSection = 'response';

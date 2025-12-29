@@ -168,6 +168,8 @@ export function ErrorLogsMonitor() {
                     modified={log.modified}
                     isSelected={effectiveSelection === log.name}
                     onClick={() => setSelectedLog(log.name)}
+                    statusCode={log.statusCode}
+                    model={log.model}
                   />
                 ))}
               </div>

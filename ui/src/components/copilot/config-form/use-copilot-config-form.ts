@@ -8,6 +8,19 @@ import { useCopilot } from '@/hooks/use-copilot';
 import { toast } from 'sonner';
 import type { ModelPreset } from './types';
 
+/** Required env vars for Copilot settings to function */
+const REQUIRED_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const;
+
+/** Validate settings have required fields */
+function validateSettings(settings: { env?: Record<string, string> } | undefined): {
+  valid: boolean;
+  missing: string[];
+} {
+  const env = settings?.env || {};
+  const missing = REQUIRED_ENV_KEYS.filter((key) => !env[key]?.trim());
+  return { valid: missing.length === 0, missing };
+}
+
 export function useCopilotConfigForm() {
   const {
     config,
@@ -101,6 +114,23 @@ export function useCopilotConfigForm() {
     return hasLocalChanges || hasJsonChanges;
   }, [localOverrides, rawJsonEdits, rawSettings]);
 
+  // Validation state for missing required fields
+  const currentSettingsForValidation = useMemo(() => {
+    if (rawJsonEdits !== null) {
+      try {
+        return JSON.parse(rawJsonEdits);
+      } catch {
+        return rawSettings?.settings;
+      }
+    }
+    return rawSettings?.settings;
+  }, [rawJsonEdits, rawSettings?.settings]);
+
+  const validationResult = useMemo(
+    () => validateSettings(currentSettingsForValidation),
+    [currentSettingsForValidation]
+  );
+
   const handleSave = async () => {
     try {
       // Save config changes
@@ -122,6 +152,17 @@ export function useCopilotConfigForm() {
       // Save raw JSON changes
       if (rawJsonEdits !== null && isRawJsonValid) {
         const settingsToSave = JSON.parse(rawJsonContent);
+
+        // Validate required fields before saving
+        const validation = validateSettings(settingsToSave);
+        if (!validation.valid) {
+          toast.error(`Missing required fields: ${validation.missing.join(', ')}`, {
+            description: 'Apply a preset or add these fields manually.',
+            duration: 6000,
+          });
+          return;
+        }
+
         await saveRawSettingsAsync({
           settings: settingsToSave,
           expectedMtime: rawSettings?.mtime,
@@ -189,5 +230,8 @@ export function useCopilotConfigForm() {
     handleSave,
     handleConflictResolve,
     refetchRawSettings,
+
+    /** List of required env vars that are missing (empty if all present) */
+    missingRequiredFields: validationResult.missing,
   };
 }

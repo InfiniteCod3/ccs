@@ -113,6 +113,16 @@ router.get('/:profile/raw', (req: Request, res: Response): void => {
   }
 });
 
+/** Required env vars for CLIProxy providers to function */
+const REQUIRED_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const;
+
+/** Validate settings have required fields */
+function validateRequiredEnvVars(settings: Settings): { valid: boolean; missing: string[] } {
+  const env = settings?.env || {};
+  const missing = REQUIRED_ENV_KEYS.filter((key) => !env[key]?.trim());
+  return { valid: missing.length === 0, missing };
+}
+
 /**
  * PUT /api/settings/:profile - Update settings with conflict detection and backup
  */
@@ -121,6 +131,16 @@ router.put('/:profile', (req: Request, res: Response): void => {
     const { profile } = req.params;
     const { settings, expectedMtime } = req.body;
     const ccsDir = getCcsDir();
+
+    // Validate required fields before saving
+    const validation = validateRequiredEnvVars(settings);
+    if (!validation.valid) {
+      res.status(400).json({
+        error: `Missing required fields: ${validation.missing.join(', ')}`,
+        fields: validation.missing,
+      });
+      return;
+    }
     const settingsPath = resolveSettingsPath(profile);
 
     const fileExists = fs.existsSync(settingsPath);

@@ -121,7 +121,11 @@ export async function execClaudeWithCLIProxy(
   args: string[],
   config: Partial<ExecutorConfig> = {}
 ): Promise<void> {
-  const cfg = { ...DEFAULT_CONFIG, ...config };
+  // Filter out undefined values to prevent overwriting defaults
+  const filteredConfig = Object.fromEntries(
+    Object.entries(config).filter(([, v]) => v !== undefined)
+  ) as Partial<ExecutorConfig>;
+  const cfg = { ...DEFAULT_CONFIG, ...filteredConfig };
   const verbose = cfg.verbose || args.includes('--verbose') || args.includes('-v');
 
   const log = (msg: string) => {

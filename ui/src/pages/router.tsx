@@ -140,9 +140,9 @@ export function RouterPage() {
       </div>
 
       {/* Right Panel - Editor or Empty State */}
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {selectedName && isProfileLoading ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex-1 flex items-center justify-center">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         ) : selectedProfile ? (

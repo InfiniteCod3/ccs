@@ -45,6 +45,12 @@ export async function validateProfile(
 
   // Validate each tier
   for (const [tierName, tierConfig] of Object.entries(profile.tiers)) {
+    // Check for empty provider/model (draft profiles)
+    if (!tierConfig.provider || !tierConfig.model) {
+      errors.push(`[${profileName}] Tier "${tierName}": provider and model are required`);
+      continue;
+    }
+
     // Check provider exists
     const provider = await getProvider(tierConfig.provider);
 

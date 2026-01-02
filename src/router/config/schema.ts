@@ -10,9 +10,10 @@ export interface TierConfig {
 }
 
 // Tier configuration (with explicit type for lazy recursion)
+// Note: provider/model can be empty during profile creation, validated on save/run
 export const tierConfigSchema: z.ZodType<TierConfig> = z.object({
-  provider: z.string().min(1),
-  model: z.string().min(1),
+  provider: z.string(),
+  model: z.string(),
   fallback: z.lazy(() => tierConfigSchema.array()).optional(),
 });
 

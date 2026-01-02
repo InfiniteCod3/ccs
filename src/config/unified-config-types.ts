@@ -341,6 +341,52 @@ export interface UnifiedConfig {
   copilot?: CopilotConfig;
   /** CLIProxy server configuration for remote/local mode */
   cliproxy_server?: CliproxyServerConfig;
+  /** Router configuration for multi-provider tier routing */
+  router?: RouterConfig;
+}
+
+/**
+ * Router configuration (imported from router module).
+ * Defines multi-provider tier routing profiles.
+ */
+export interface RouterConfig {
+  /** Port for router proxy server (default: 9400) */
+  port?: number;
+  /** Router defaults (timeout, retries) */
+  defaults?: {
+    timeout?: string;
+    retries?: number;
+  };
+  /** Router profiles mapping tier names to provider/model configs */
+  profiles?: Record<string, RouterProfile>;
+  /** Custom API provider definitions */
+  providers?: Record<string, ApiProviderConfig>;
+}
+
+/** Router profile with tier configurations */
+export interface RouterProfile {
+  description?: string;
+  tiers: {
+    opus: TierConfig;
+    sonnet: TierConfig;
+    haiku: TierConfig;
+  };
+}
+
+/** Tier configuration with fallback chain */
+export interface TierConfig {
+  provider: string;
+  model: string;
+  fallback?: TierConfig[];
+}
+
+/** Custom API provider configuration */
+export interface ApiProviderConfig {
+  adapter: 'anthropic' | 'openai-compat' | 'openrouter' | 'custom';
+  base_url: string;
+  auth_env: string;
+  models: string[];
+  headers?: Record<string, string>;
 }
 
 /**

@@ -395,6 +395,26 @@ function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push('');
   }
 
+  // Router section (multi-provider tier routing)
+  if (config.router && Object.keys(config.router).length > 0) {
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push('# Router: Multi-provider tier routing for Claude API requests');
+    lines.push('# Routes opus/sonnet/haiku tiers to different providers with fallback chains.');
+    lines.push('# Configure via Dashboard (`ccs config`) > Router tab or `ccs router` CLI.');
+    lines.push('#');
+    lines.push('# Profiles define which provider/model handles each tier:');
+    lines.push('#   opus: High-capability tier (Claude Opus, GPT-4.5, Gemini Ultra)');
+    lines.push('#   sonnet: Balanced tier (Claude Sonnet, GPT-4, Gemini Pro)');
+    lines.push('#   haiku: Fast/cheap tier (Claude Haiku, GPT-3.5, Gemini Flash)');
+    lines.push('#');
+    lines.push('# Each tier supports fallback chains for redundancy.');
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push(
+      yaml.dump({ router: config.router }, { indent: 2, lineWidth: -1, quotingType: '"' }).trim()
+    );
+    lines.push('');
+  }
+
   return lines.join('\n');
 }
 

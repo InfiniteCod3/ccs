@@ -9,7 +9,15 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { existsSync, statSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
+import {
+  existsSync,
+  statSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  renameSync,
+  unlinkSync,
+} from 'node:fs';
 import { dirname } from 'node:path';
 import { loadRouterConfig, getRouterProfile } from '../../router/config/loader';
 import { saveRouterProfile, deleteRouterProfile } from '../../router/config/writer';
@@ -229,7 +237,16 @@ router.get('/profiles/:name/settings', (req: Request, res: Response): void => {
     if (existsSync(settingsPath)) {
       const stat = statSync(settingsPath);
       const content = readFileSync(settingsPath, 'utf-8');
-      const settings = JSON.parse(content);
+      let settings;
+      try {
+        settings = JSON.parse(content);
+      } catch {
+        res.status(500).json({
+          error: 'Settings file corrupted',
+          hint: `Use POST /api/router/profiles/${req.params.name}/settings/regenerate to rebuild`,
+        });
+        return;
+      }
 
       res.json({
         profile: req.params.name,
@@ -292,10 +309,22 @@ router.put('/profiles/:name/settings', (req: Request, res: Response): void => {
     // Ensure directory exists
     mkdirSync(dirname(settingsPath), { recursive: true });
 
-    // Write settings atomically
+    // Write settings atomically with cleanup on failure
     const tempPath = settingsPath + '.tmp';
-    writeFileSync(tempPath, JSON.stringify(settings, null, 2) + '\n');
-    renameSync(tempPath, settingsPath);
+    try {
+      writeFileSync(tempPath, JSON.stringify(settings, null, 2) + '\n');
+      renameSync(tempPath, settingsPath);
+    } catch (writeError) {
+      // Cleanup orphaned temp file
+      if (existsSync(tempPath)) {
+        try {
+          unlinkSync(tempPath);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+      throw writeError;
+    }
 
     const newStat = statSync(settingsPath);
     res.json({

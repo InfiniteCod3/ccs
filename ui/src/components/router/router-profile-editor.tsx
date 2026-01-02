@@ -12,6 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Save, TestTube2, Loader2, Code2, Terminal, FileJson, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 import { RouterTierConfig } from './router-tier-config';
 import { useRouterProviders } from '@/hooks/use-router-providers';
 import {
@@ -102,11 +103,17 @@ export function RouterProfileEditor({ profile, onHasChanges }: RouterProfileEdit
         expectedMtime: settingsData?.mtime,
       });
     } catch {
-      // Invalid JSON - ignore
+      toast.error('Invalid JSON format');
     }
   };
 
   const handleRegenerateSettings = () => {
+    // Warn if there are unsaved changes
+    if (hasSettingsChanges) {
+      if (!confirm('Regenerate will overwrite your unsaved changes. Continue?')) {
+        return;
+      }
+    }
     regenerateSettingsMutation.mutate(profile.name, {
       onSuccess: (data) => {
         setSettingsEdits(JSON.stringify(data.settings, null, 2));

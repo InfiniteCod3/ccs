@@ -30,6 +30,7 @@ const SettingsPage = lazy(() =>
 );
 const HealthPage = lazy(() => import('@/pages/health').then((m) => ({ default: m.HealthPage })));
 const SharedPage = lazy(() => import('@/pages/shared').then((m) => ({ default: m.SharedPage })));
+const RouterPage = lazy(() => import('@/pages/router').then((m) => ({ default: m.RouterPage })));
 
 export default function App() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/health" element={<HealthPage />} />
                 <Route path="/shared" element={<SharedPage />} />
+                <Route path="/router" element={<RouterPage />} />
               </Route>
             </Routes>
             <Toaster position="top-right" />

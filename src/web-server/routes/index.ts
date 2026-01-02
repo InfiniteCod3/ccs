@@ -21,6 +21,7 @@ import cliproxyStatsRoutes from './cliproxy-stats-routes';
 import copilotRoutes from './copilot-routes';
 import miscRoutes from './misc-routes';
 import cliproxyServerRoutes from './proxy-routes';
+import routerRoutes from './router-routes';
 
 // Create the main API router
 export const apiRoutes = Router();
@@ -53,6 +54,9 @@ apiRoutes.use('/copilot', copilotRoutes);
 
 // ==================== CLIProxy Server Settings ====================
 apiRoutes.use('/cliproxy-server', cliproxyServerRoutes);
+
+// ==================== Router Profiles ====================
+apiRoutes.use('/router', routerRoutes);
 
 // ==================== Misc (File API, Global Env) ====================
 apiRoutes.use('/', miscRoutes);

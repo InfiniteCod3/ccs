@@ -11,6 +11,7 @@ import {
   BarChart3,
   Gauge,
   Github,
+  Route,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -51,6 +52,7 @@ const navGroups = [
         label: 'API Profiles',
         badge: { text: 'OpenRouter', icon: '/icons/openrouter.svg' },
       },
+      { path: '/router', icon: Route, label: 'Router' },
       {
         path: '/cliproxy',
         icon: Zap,

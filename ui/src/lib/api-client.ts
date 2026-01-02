@@ -1,3 +1,12 @@
+import type {
+  RouterProfileSummary,
+  RouterProfile,
+  CreateRouterProfile,
+  UpdateRouterProfile,
+  RouterProvider,
+  ProfileTestResult,
+} from './router-types';
+
 /**
  * API Client
  * Phase 03: REST API Routes & CRUD
@@ -451,5 +460,33 @@ export const api = {
     /** Fetch quota for a specific account */
     get: (provider: string, accountId: string) =>
       request<QuotaResult>(`/cliproxy/quota/${provider}/${encodeURIComponent(accountId)}`),
+  },
+  /** Router profile management API */
+  router: {
+    profiles: {
+      list: () => request<{ profiles: RouterProfileSummary[] }>('/router/profiles'),
+      get: (name: string) => request<RouterProfile>(`/router/profiles/${encodeURIComponent(name)}`),
+      create: (data: CreateRouterProfile) =>
+        request<{ success: boolean; name: string }>('/router/profiles', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }),
+      update: (name: string, data: UpdateRouterProfile) =>
+        request<{ success: boolean }>(`/router/profiles/${encodeURIComponent(name)}`, {
+          method: 'PUT',
+          body: JSON.stringify(data),
+        }),
+      delete: (name: string) =>
+        request<{ success: boolean }>(`/router/profiles/${encodeURIComponent(name)}`, {
+          method: 'DELETE',
+        }),
+      test: (name: string) =>
+        request<ProfileTestResult>(`/router/profiles/${encodeURIComponent(name)}/test`, {
+          method: 'POST',
+        }),
+    },
+    providers: {
+      list: () => request<{ providers: RouterProvider[] }>('/router/providers'),
+    },
   },
 };

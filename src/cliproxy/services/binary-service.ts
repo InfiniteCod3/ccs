@@ -98,7 +98,7 @@ export async function installVersion(version: string, verbose = false): Promise<
     return {
       success: false,
       version,
-      error: 'Invalid version format. Expected format: X.Y.Z (e.g., 6.5.53)',
+      error: 'Invalid version format. Expected format: X.Y.Z or X.Y.Z-N (e.g., 6.5.53 or 6.6.62-0)',
     };
   }
 

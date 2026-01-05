@@ -444,6 +444,23 @@ export async function execClaudeWithCLIProxy(
     } else {
       log(`${provider} already authenticated`);
     }
+
+    // 3a. Proactive token refresh - prevent UND_ERR_SOCKET from expired tokens
+    // CLIProxyAPI may fail mid-request if token expires during use
+    const { ensureTokenValid } = await import('./auth/token-manager');
+    const tokenResult = await ensureTokenValid(provider, verbose);
+    if (!tokenResult.valid) {
+      // Token expired and refresh failed - trigger re-auth
+      console.error(warn('OAuth token expired and refresh failed'));
+      if (tokenResult.error) {
+        console.error(`    ${tokenResult.error}`);
+      }
+      console.error(`    Run "ccs ${provider} --auth" to re-authenticate`);
+      process.exit(1);
+    }
+    if (tokenResult.refreshed) {
+      log('Token was refreshed proactively');
+    }
   }
 
   // 4. First-run model configuration (interactive)
